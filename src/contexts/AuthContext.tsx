@@ -27,33 +27,35 @@ interface AuthContextValue {
 }
 
 const EMPTY_USER: User = {
-  id: '',
-  name: '',
-  email: '',
-  plan: 'free',
-  isAdmin: false,
-  notifications: {
-    enabled: true,
-    notifyBefore: true,
-    notifyAtTime: true,
-    dailyListTime: '08:00',
-  },
+  id: '', name: '', email: '', plan: 'free', isAdmin: false,
+  notifications: { enabled: true, notifyBefore: true, notifyAtTime: true, dailyListTime: '08:00' },
 };
 
 function profileToUser(profile: Profile): User {
   return {
-    id: profile.id,
-    name: profile.name,
-    email: profile.email,
-    plan: profile.plan as UserPlan,
-    isAdmin: profile.is_admin,
+    id: profile.id, name: profile.name, email: profile.email,
+    plan: profile.plan as UserPlan, isAdmin: profile.is_admin,
     notifications: {
-      enabled: profile.notifications_enabled,
-      notifyBefore: profile.notify_before,
-      notifyAtTime: profile.notify_at_time,
-      dailyListTime: profile.daily_list_time,
+      enabled: profile.notifications_enabled, notifyBefore: profile.notify_before,
+      notifyAtTime: profile.notify_at_time, dailyListTime: profile.daily_list_time,
     },
   };
+}
+
+/** Check if premium has expired and downgrade if needed */
+async function checkPremiumExpiration(profile: Profile): Promise<Profile> {
+  if (profile.plan === 'premium' && profile.premium_expires_at) {
+    const expires = new Date(profile.premium_expires_at);
+    if (expires < new Date()) {
+      // Expired - downgrade to free
+      await supabase.from('profiles').update({
+        plan: 'free',
+        premium_origin: profile.premium_origin || 'trial',
+      }).eq('id', profile.id);
+      return { ...profile, plan: 'free' };
+    }
+  }
+  return profile;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -72,13 +74,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchProfile = useCallback(async (userId: string): Promise<Profile | null> => {
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
+      const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
       if (!error && data) {
-        return data as Profile;
+        const checked = await checkPremiumExpiration(data as Profile);
+        return checked;
       }
     } catch (e) {
       console.error("Error fetching profile:", e);
@@ -93,65 +92,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const initSession = async () => {
       try {
         const { data, error } = await supabase.auth.getSession();
-        if (error) {
-          console.warn('[Auth] getSession error:', error.message);
-        }
+        if (error) console.warn('[Auth] getSession error:', error.message);
         const s = data.session;
         if (s?.user) {
           const profile = await fetchProfile(s.user.id);
-          if (mountedRef.current && profile) {
-            setCurrentUser(profileToUser(profile));
-          }
+          if (mountedRef.current && profile) setCurrentUser(profileToUser(profile));
           setSession(s);
         }
       } finally {
-        if (mountedRef.current && !resolved) {
-          resolved = true;
-          setLoading(false);
-        }
+        if (mountedRef.current && !resolved) { resolved = true; setLoading(false); }
       }
     };
 
     initSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, s) => {
-        setSession(s ?? null);
-
-        if (s?.user) {
-          setTimeout(async () => {
-            const profile = await fetchProfile(s.user.id);
-            if (mountedRef.current) {
-              if (profile) {
-                setCurrentUser(profileToUser(profile));
-              } else {
-                setTimeout(async () => {
-                  const retryProfile = await fetchProfile(s.user.id);
-                  if (mountedRef.current && retryProfile) {
-                    setCurrentUser(profileToUser(retryProfile));
-                  }
-                }, 1000);
-              }
-            }
-            ensureStorageBuckets();
-          }, 0);
-        } else {
-          setCurrentUser(EMPTY_USER);
-        }
-
-        if (mountedRef.current && !resolved) {
-          resolved = true;
-          setLoading(false);
-        }
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+      setSession(s ?? null);
+      if (s?.user) {
+        setTimeout(async () => {
+          const profile = await fetchProfile(s.user.id);
+          if (mountedRef.current) {
+            if (profile) setCurrentUser(profileToUser(profile));
+            else setTimeout(async () => {
+              const retry = await fetchProfile(s.user.id);
+              if (mountedRef.current && retry) setCurrentUser(profileToUser(retry));
+            }, 1000);
+          }
+          ensureStorageBuckets();
+        }, 0);
+      } else {
+        setCurrentUser(EMPTY_USER);
       }
-    );
+      if (mountedRef.current && !resolved) { resolved = true; setLoading(false); }
+    });
 
-    const safetyTimeout = setTimeout(() => {
-      if (!resolved) {
-        resolved = true;
-        setLoading(false);
-      }
-    }, 4000);
+    const safetyTimeout = setTimeout(() => { if (!resolved) { resolved = true; setLoading(false); } }, 4000);
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
@@ -160,14 +135,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (freshSession?.user) {
             setSession(freshSession);
             const profile = await fetchProfile(freshSession.user.id);
-            if (mountedRef.current && profile) {
-              setCurrentUser(profileToUser(profile));
-            }
+            if (mountedRef.current && profile) setCurrentUser(profileToUser(profile));
           }
         });
       }
     };
-
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
@@ -190,14 +162,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const register = useCallback(async (name: string, email: string, password: string) => {
     if (!name.trim() || !email || !password) throw new Error('Todos os campos são obrigatórios');
     if (password.length < 6) throw new Error('Senha deve ter pelo menos 6 caracteres');
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
+    const { data, error } = await supabase.auth.signUp({
+      email, password,
       options: { data: { name: name.trim() } },
     });
     if (error) {
       if (error.message.includes('already registered')) throw new Error('Este email já está cadastrado');
       throw new Error(error.message);
+    }
+
+    // Set trial: 7 days premium
+    if (data.user) {
+      const trialExpires = new Date();
+      trialExpires.setDate(trialExpires.getDate() + 7);
+      await supabase.from('profiles').update({
+        plan: 'premium',
+        premium_origin: 'trial',
+        trial_started_at: new Date().toISOString(),
+        premium_expires_at: trialExpires.toISOString(),
+      }).eq('id', data.user.id);
     }
   }, []);
 

@@ -1,15 +1,19 @@
 import React, { useState, useMemo } from 'react';
-import { Plus, Search, X, Trash2, Users, MessageCircle } from 'lucide-react';
+import { Plus, Search, X, Trash2, Users, MessageCircle, CalendarDays } from 'lucide-react';
 import { Student } from '../types';
 import { useToast } from '../hooks/useFitToast';
 import { useStudents } from '../hooks/useStudents';
+import { useAppointments } from '../hooks/useAppointments';
 import { usePermissions } from '../hooks/usePermissions';
+import { format, addDays, getDay, startOfWeek, addWeeks } from 'date-fns';
 
 const DAYS = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
-const TIMES = Array.from({ length: 15 }, (_, i) => `${String(6 + i).padStart(2, '0')}:00`);
+const DAY_MAP: Record<string, number> = { Segunda: 1, Terça: 2, Quarta: 3, Quinta: 4, Sexta: 5, Sábado: 6, Domingo: 0 };
+const TIMES = Array.from({ length: 18 }, (_, i) => `${String(5 + i).padStart(2, '0')}:00`);
 
 const Students: React.FC = () => {
   const { students, addStudent, updateStudent, deleteStudent } = useStudents();
+  const { addAppointment } = useAppointments();
   const { canAddStudent } = usePermissions();
   const { success, error: showError } = useToast();
 
@@ -18,6 +22,9 @@ const Students: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
   const [saving, setSaving] = useState(false);
+  const [showAutoSchedule, setShowAutoSchedule] = useState(false);
+  const [lastSavedStudent, setLastSavedStudent] = useState<Student | null>(null);
+  const [creatingSchedule, setCreatingSchedule] = useState(false);
 
   const [formData, setFormData] = useState<Partial<Student>>({
     name: '', phone: '', plan: 'monthly', value: 0, weeklyFrequency: 1,
@@ -69,7 +76,6 @@ const Students: React.FC = () => {
         selectedTimes: times.filter((_, i) => i !== idx),
       });
     } else {
-      // Limit by frequency
       if (selectedDaysCount >= maxDays) {
         showError(`Máximo ${maxDays} dia${maxDays > 1 ? 's' : ''} para esta frequência`);
         return;
@@ -91,7 +97,6 @@ const Students: React.FC = () => {
   const handleFrequencyChange = (freq: number) => {
     const days = formData.selectedDays || [];
     const times = formData.selectedTimes || [];
-    // If current selection exceeds new frequency, trim
     if (days.length > freq) {
       setFormData({
         ...formData,
@@ -111,16 +116,66 @@ const Students: React.FC = () => {
       if (editingStudent) {
         await updateStudent(editingStudent.id, formData);
         success('Aluno atualizado!');
+        setShowForm(false);
+        resetForm();
       } else {
-        await addStudent(formData as Omit<Student, 'id'>);
+        const newStudent = await addStudent(formData as Omit<Student, 'id'>);
         success('Aluno adicionado!');
+        setShowForm(false);
+
+        // Offer auto-schedule if has days selected and not consulting
+        if (!formData.isConsulting && (formData.selectedDays || []).length > 0 && newStudent) {
+          setLastSavedStudent({ ...formData, id: newStudent.id } as Student);
+          setShowAutoSchedule(true);
+        }
+        resetForm();
       }
-      setShowForm(false);
-      resetForm();
     } catch {
       showError('Erro ao salvar');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleAutoCreateSchedule = async () => {
+    if (!lastSavedStudent) return;
+    setCreatingSchedule(true);
+    try {
+      const today = new Date();
+      const nextMonday = startOfWeek(today, { weekStartsOn: 1 });
+      const startFrom = nextMonday <= today ? addWeeks(nextMonday, 0) : nextMonday;
+
+      let count = 0;
+      for (let week = 0; week < 4; week++) {
+        const weekStart = addWeeks(startFrom, week);
+        for (let dayIdx = 0; dayIdx < (lastSavedStudent.selectedDays || []).length; dayIdx++) {
+          const dayName = lastSavedStudent.selectedDays[dayIdx];
+          const time = lastSavedStudent.selectedTimes[dayIdx] || '08:00';
+          const jsDay = DAY_MAP[dayName];
+
+          // Find the date in this week for this day
+          for (let d = 0; d < 7; d++) {
+            const date = addDays(weekStart, d);
+            if (getDay(date) === jsDay && date >= today) {
+              await addAppointment({
+                studentId: lastSavedStudent.id,
+                studentName: lastSavedStudent.name,
+                date: format(date, 'yyyy-MM-dd'),
+                time,
+              });
+              count++;
+              break;
+            }
+          }
+        }
+      }
+      success(`${count} agendamentos criados para as próximas 4 semanas!`);
+    } catch {
+      showError('Erro ao criar agendamentos');
+    } finally {
+      setCreatingSchedule(false);
+      setShowAutoSchedule(false);
+      setLastSavedStudent(null);
     }
   };
 
@@ -304,6 +359,39 @@ const Students: React.FC = () => {
 
               <button onClick={handleSave} disabled={saving} className="btn btn-primary w-full py-3 text-sm font-bold">
                 {saving ? 'Salvando...' : editingStudent ? 'Salvar alterações' : 'Adicionar aluno'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Auto-schedule modal */}
+      {showAutoSchedule && lastSavedStudent && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-foreground/40">
+          <div className="card-surface w-full max-w-md mx-4 p-6 rounded-t-2xl sm:rounded-2xl animate-fade-in-up">
+            <div className="flex items-center gap-2 mb-3">
+              <CalendarDays size={20} className="text-primary" />
+              <h3 className="text-lg font-bold text-foreground">Criar agendamentos</h3>
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">
+              Deseja criar agendamentos automáticos para <strong className="text-foreground">{lastSavedStudent.name}</strong> nas próximas 4 semanas?
+            </p>
+            <div className="text-xs text-muted-foreground mb-4 space-y-1">
+              {(lastSavedStudent.selectedDays || []).map((day, i) => (
+                <div key={day} className="flex items-center gap-2">
+                  <span className="font-bold text-foreground">{day}</span>
+                  <span>às {lastSavedStudent.selectedTimes[i] || '08:00'}</span>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => { setShowAutoSchedule(false); setLastSavedStudent(null); }}
+                className="flex-1 py-3 rounded-xl text-sm font-bold bg-muted text-muted-foreground">
+                Não
+              </button>
+              <button onClick={handleAutoCreateSchedule} disabled={creatingSchedule}
+                className="flex-1 btn btn-primary py-3 text-sm font-bold">
+                {creatingSchedule ? 'Criando...' : 'Sim, criar'}
               </button>
             </div>
           </div>

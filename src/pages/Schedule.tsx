@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { format, addDays, startOfWeek, isToday, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Clock, ChevronLeft, ChevronRight, Plus, X, CheckCircle2, MessageCircle, Dumbbell, List, CalendarDays, LayoutGrid, GripVertical } from 'lucide-react';
-import { DndContext, closestCenter, DragEndEvent, DragOverlay, useSensor, useSensors, PointerSensor, TouchSensor } from '@dnd-kit/core';
+import { DndContext, closestCenter, DragEndEvent, useSensor, useSensors, PointerSensor, TouchSensor } from '@dnd-kit/core';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Appointment, MuscleGroup } from '../types';
@@ -27,14 +27,14 @@ const MUSCLE_GROUPS: { id: MuscleGroup; label: string; emoji: string }[] = [
   { id: 'cardio', label: 'Cardio', emoji: '❤️' },
 ];
 
-const TIME_SLOTS = Array.from({ length: 15 }, (_, i) => {
-  const h = 6 + i;
+// 05:00 to 22:00 = 18 slots
+const TIME_SLOTS = Array.from({ length: 18 }, (_, i) => {
+  const h = 5 + i;
   return `${String(h).padStart(2, '0')}:00`;
 });
 
 type ViewMode = 'day' | 'week' | 'list';
 
-// Draggable appointment card
 function DraggableCard({ apt, onMarkDone, onDelete, onWhatsApp }: {
   apt: Appointment;
   onMarkDone: (apt: Appointment) => void;
@@ -112,7 +112,6 @@ const Schedule: React.FC = () => {
   const dateKey = format(selectedDate, 'yyyy-MM-dd');
   const dayAppointments = (appointments[dateKey] || []).sort((a, b) => a.time.localeCompare(b.time));
 
-  // All week appointments flat
   const weekAppointments = useMemo(() => {
     const all: (Appointment & { dateKey: string })[] = [];
     weekDays.forEach(day => {
@@ -167,7 +166,6 @@ const Schedule: React.FC = () => {
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    // over.id can be a time slot like "2025-01-01_08:00"
     const overId = String(over.id);
     if (overId.includes('_')) {
       const [newDateStr, newTimeStr] = overId.split('_');
@@ -178,13 +176,13 @@ const Schedule: React.FC = () => {
     }
   };
 
-  const openNewModal = (date?: string) => {
+  const openNewModal = (date?: string, time?: string) => {
     setNewDate(date || '');
+    setNewTime(time || '08:00');
     setShowNewModal(true);
   };
 
-  // ============ VIEWS ============
-
+  // ============ DAY VIEW with grid ============
   const renderDayView = () => (
     <>
       {/* Week strip */}
@@ -210,29 +208,45 @@ const Schedule: React.FC = () => {
         <button onClick={() => openNewModal()} className="btn btn-primary px-3 py-2 text-xs"><Plus size={14} /> Novo</button>
       </div>
 
+      {/* Grid diário com slots 05-22h */}
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        {dayAppointments.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <List size={40} className="text-muted-foreground mb-3" />
-            <p className="text-sm text-muted-foreground">Nenhum agendamento</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {dayAppointments.map(apt => (
-              <DraggableCard key={apt.id} apt={apt} onMarkDone={openDoneModal} onDelete={handleDelete} onWhatsApp={getStudentPhone(apt.studentId)} />
-            ))}
-          </div>
-        )}
+        <div className="space-y-0">
+          {TIME_SLOTS.map(time => {
+            const slotApts = dayAppointments.filter(a => a.time === time);
+            const droppableId = `${dateKey}_${time}`;
+            return (
+              <div key={time} className="flex border-b border-border/30">
+                <div className="w-14 shrink-0 py-2 pr-2 text-right">
+                  <span className="text-[11px] font-bold text-muted-foreground">{time}</span>
+                </div>
+                <DroppableSlot id={droppableId} onClick={() => slotApts.length === 0 && openNewModal(dateKey, time)}>
+                  {slotApts.length > 0 ? (
+                    <div className="space-y-1 py-1">
+                      {slotApts.map(apt => (
+                        <DraggableCard key={apt.id} apt={apt} onMarkDone={openDoneModal} onDelete={handleDelete} onWhatsApp={getStudentPhone(apt.studentId)} />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="py-3 text-center">
+                      <span className="text-[10px] text-muted-foreground/50">+ agendar</span>
+                    </div>
+                  )}
+                </DroppableSlot>
+              </div>
+            );
+          })}
+        </div>
       </DndContext>
     </>
   );
 
+  // ============ WEEK VIEW with grid ============
   const renderWeekView = () => (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <div className="overflow-x-auto -mx-4 px-4">
         <div className="min-w-[700px]">
           {/* Header */}
-          <div className="grid grid-cols-8 gap-px mb-1">
+          <div className="grid grid-cols-8 gap-px mb-1 sticky top-0 bg-background z-10">
             <div className="p-1 text-[10px] font-bold text-muted-foreground">Hora</div>
             {weekDays.map(day => (
               <div key={day.toISOString()} className={`p-1 text-center rounded-lg ${isToday(day) ? 'bg-primary text-primary-foreground' : 'text-foreground'}`}>
@@ -250,7 +264,7 @@ const Schedule: React.FC = () => {
                 const slotApts = (appointments[key] || []).filter(a => a.time === time);
                 const droppableId = `${key}_${time}`;
                 return (
-                  <DroppableSlot key={droppableId} id={droppableId}>
+                  <DroppableSlot key={droppableId} id={droppableId} onClick={() => slotApts.length === 0 && openNewModal(key, time)}>
                     {slotApts.map(apt => (
                       <div key={apt.id} className={`text-[10px] p-1 rounded mb-0.5 cursor-pointer truncate ${apt.sessionDone ? 'bg-success/20 text-success' : 'bg-primary/10 text-primary'} font-medium`}
                         onClick={() => { setSelectedDate(day); setViewMode('day'); }}>
@@ -267,6 +281,7 @@ const Schedule: React.FC = () => {
     </DndContext>
   );
 
+  // ============ LIST VIEW ============
   const renderListView = () => {
     const grouped: Record<string, Appointment[]> = {};
     weekDays.forEach(day => {
@@ -354,12 +369,10 @@ const Schedule: React.FC = () => {
                   ))}
                 </select>
               </div>
-              {(viewMode === 'week' || viewMode === 'list') && (
-                <div>
-                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5 block">Data</label>
-                  <input type="date" value={newDate || dateKey} onChange={e => setNewDate(e.target.value)} className="input-field" />
-                </div>
-              )}
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5 block">Data</label>
+                <input type="date" value={newDate || dateKey} onChange={e => setNewDate(e.target.value)} className="input-field" />
+              </div>
               <div>
                 <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5 block">Horário</label>
                 <select value={newTime} onChange={e => setNewTime(e.target.value)} className="input-field">
@@ -405,11 +418,12 @@ const Schedule: React.FC = () => {
   );
 };
 
-// Droppable slot for week view
-function DroppableSlot({ id, children }: { id: string; children: React.ReactNode }) {
+// Droppable slot
+function DroppableSlot({ id, children, onClick }: { id: string; children: React.ReactNode; onClick?: () => void }) {
   const { setNodeRef, isOver } = useSortable({ id });
   return (
-    <div ref={setNodeRef} className={`min-h-[40px] border border-border/50 rounded p-0.5 transition-colors ${isOver ? 'bg-primary/10 border-primary' : 'bg-card/50'}`}>
+    <div ref={setNodeRef} onClick={onClick}
+      className={`flex-1 min-h-[40px] border border-border/30 rounded p-0.5 transition-colors cursor-pointer ${isOver ? 'bg-primary/10 border-primary' : 'hover:bg-muted/50'}`}>
       {children}
     </div>
   );

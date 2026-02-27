@@ -15,6 +15,9 @@ export interface Database {
           notify_before: boolean;
           notify_at_time: boolean;
           daily_list_time: string;
+          premium_expires_at: string | null;
+          premium_origin: string;
+          trial_started_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -29,6 +32,9 @@ export interface Database {
           notify_before?: boolean;
           notify_at_time?: boolean;
           daily_list_time?: string;
+          premium_expires_at?: string | null;
+          premium_origin?: string;
+          trial_started_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -43,6 +49,9 @@ export interface Database {
           notify_before?: boolean;
           notify_at_time?: boolean;
           daily_list_time?: string;
+          premium_expires_at?: string | null;
+          premium_origin?: string;
+          trial_started_at?: string | null;
           updated_at?: string;
         };
       };
