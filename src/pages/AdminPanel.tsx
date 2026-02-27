@@ -303,68 +303,97 @@ const AdminPanel: React.FC = () => {
 
   const handleUpgradeToPremium = () => {
     if (!selectedUser || upgradeDays <= 0) return;
-    setUsers(prev => prev.map(u => {
-      if (u.id !== selectedUser.id) return u;
-      const start = todayStr();
-      const end = addDays(start, upgradeDays);
-      const newEntry: PlanHistoryEntry = {
-        id: `h${Date.now()}`,
-        plan: 'premium',
-        origin: upgradeOrigin,
-        startDate: start,
-        endDate: end,
-        durationDays: upgradeDays,
-        addedBy: 'Admin',
-        note: upgradeNote || `Upgrade para Premium — ${upgradeDays} dias (${upgradeOrigin === 'paid' ? 'pago' : 'cortesia'})`,
-      };
-      return {
-        ...u,
-        plan: 'premium' as UserPlan,
-        status: 'active' as const,
-        subscription: {
-          plan: 'premium',
-          status: 'active',
-          startDate: start,
-          endDate: end,
-          origin: upgradeOrigin,
-          history: [...u.subscription.history, newEntry],
-        },
-      };
-    }));
-    showToast(`${selectedUser.name} agora é Premium!`);
+    const start = todayStr();
+    const end = addDays(start, upgradeDays);
+    const newEntry: PlanHistoryEntry = {
+      id: `h${Date.now()}`,
+      plan: 'premium',
+      origin: upgradeOrigin,
+      startDate: start,
+      endDate: end,
+      durationDays: upgradeDays,
+      addedBy: 'Admin',
+      note: upgradeNote || `Upgrade para Premium — ${upgradeDays} dias (${upgradeOrigin === 'paid' ? 'pago' : 'cortesia'})`,
+    };
+    const newHistory = [...selectedUser.subscription.history, newEntry];
+
+    supabase.from('profiles').update({
+      plan: 'premium',
+      subscription_end_date: end,
+      subscription_origin: upgradeOrigin,
+      subscription_history: newHistory as any,
+    }).eq('id', selectedUser.id).then(({ error }) => {
+      if (error) {
+        showToast('Erro ao salvar no banco: ' + error.message, 'error');
+      } else {
+        setUsers(prev => prev.map(u => {
+          if (u.id !== selectedUser.id) return u;
+          return {
+            ...u,
+            plan: 'premium' as UserPlan,
+            status: 'active' as const,
+            subscription: {
+              plan: 'premium',
+              status: 'active',
+              startDate: start,
+              endDate: end,
+              origin: upgradeOrigin,
+              history: newHistory,
+            },
+          };
+        }));
+        showToast(`${selectedUser.name} agora é Premium!`);
+      }
+    });
+
     setShowUpgradeModal(false);
     setUpgradeDays(30);
     setUpgradeNote('');
   };
 
   const handleDowngradeToFree = (userId: string) => {
-    setUsers(prev => prev.map(u => {
-      if (u.id !== userId) return u;
-      const newEntry: PlanHistoryEntry = {
-        id: `h${Date.now()}`,
-        plan: 'free',
-        origin: 'courtesy',
-        startDate: todayStr(),
-        endDate: '',
-        durationDays: 0,
-        addedBy: 'Admin',
-        note: 'Rebaixado para plano gratuito',
-      };
-      return {
-        ...u,
-        plan: 'free' as UserPlan,
-        subscription: {
-          plan: 'free',
-          status: 'active',
-          startDate: todayStr(),
-          endDate: '',
-          origin: 'courtesy',
-          history: [...u.subscription.history, newEntry],
-        },
-      };
-    }));
     const user = users.find(u => u.id === userId);
-    showToast(`${user?.name} rebaixado para Free`, 'warning');
+    if (!user) return;
+
+    const newEntry: PlanHistoryEntry = {
+      id: `h${Date.now()}`,
+      plan: 'free',
+      origin: 'courtesy',
+      startDate: todayStr(),
+      endDate: '',
+      durationDays: 0,
+      addedBy: 'Admin',
+      note: 'Rebaixado para plano gratuito',
+    };
+    const newHistory = [...user.subscription.history, newEntry];
+
+    supabase.from('profiles').update({
+      plan: 'free',
+      subscription_end_date: null,
+      subscription_origin: 'courtesy',
+      subscription_history: newHistory as any,
+    }).eq('id', userId).then(({ error }) => {
+      if (error) {
+        showToast('Erro ao salvar no banco: ' + error.message, 'error');
+      } else {
+        setUsers(prev => prev.map(u => {
+          if (u.id !== userId) return u;
+          return {
+            ...u,
+            plan: 'free' as UserPlan,
+            subscription: {
+              plan: 'free',
+              status: 'active',
+              startDate: todayStr(),
+              endDate: '',
+              origin: 'courtesy',
+              history: newHistory,
+            },
+          };
+        }));
+        showToast(`${user.name} rebaixado para Free`, 'warning');
+      }
+    });
   };
 
   // ── Radix Modal Component ──
