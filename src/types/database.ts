@@ -9,15 +9,11 @@ export interface Database {
           name: string;
           email: string;
           phone: string | null;
-          plan: 'free' | 'premium';
-          is_admin: boolean;
-          notifications_enabled: boolean;
-          notify_before: boolean;
-          notify_at_time: boolean;
-          daily_list_time: string;
+          avatar_url: string | null;
+          stripe_customer_id: string | null;
+          subscription_status: 'free' | 'active' | 'canceled' | 'past_due';
+          subscription_product_id: string | null;
           subscription_end_date: string | null;
-          subscription_origin: 'trial' | 'courtesy' | 'paid';
-          subscription_history: Json;
           created_at: string;
           updated_at: string;
         };
@@ -26,33 +22,39 @@ export interface Database {
           name: string;
           email: string;
           phone?: string | null;
-          plan?: 'free' | 'premium';
-          is_admin?: boolean;
-          notifications_enabled?: boolean;
-          notify_before?: boolean;
-          notify_at_time?: boolean;
-          daily_list_time?: string;
+          avatar_url?: string | null;
+          stripe_customer_id?: string | null;
+          subscription_status?: 'free' | 'active' | 'canceled' | 'past_due';
+          subscription_product_id?: string | null;
           subscription_end_date?: string | null;
-          subscription_origin?: 'trial' | 'courtesy' | 'paid';
-          subscription_history?: Json;
           created_at?: string;
           updated_at?: string;
         };
         Update: {
-          id?: string;
           name?: string;
           email?: string;
           phone?: string | null;
-          plan?: 'free' | 'premium';
-          is_admin?: boolean;
-          notifications_enabled?: boolean;
-          notify_before?: boolean;
-          notify_at_time?: boolean;
-          daily_list_time?: string;
+          avatar_url?: string | null;
+          stripe_customer_id?: string | null;
+          subscription_status?: 'free' | 'active' | 'canceled' | 'past_due';
+          subscription_product_id?: string | null;
           subscription_end_date?: string | null;
-          subscription_origin?: 'trial' | 'courtesy' | 'paid';
-          subscription_history?: Json;
           updated_at?: string;
+        };
+      };
+      user_roles: {
+        Row: {
+          id: string;
+          user_id: string;
+          role: 'admin' | 'user';
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          role: 'admin' | 'user';
+        };
+        Update: {
+          role?: 'admin' | 'user';
         };
       };
       students: {
@@ -69,6 +71,7 @@ export interface Database {
           is_consulting: boolean;
           is_active: boolean;
           billing_day: number | null;
+          share_token: string | null;
           plan_duration: number | null;
           total_value: number | null;
           next_billing_date: string | null;
@@ -88,11 +91,10 @@ export interface Database {
           is_consulting?: boolean;
           is_active?: boolean;
           billing_day?: number | null;
+          share_token?: string | null;
           plan_duration?: number | null;
           total_value?: number | null;
           next_billing_date?: string | null;
-          created_at?: string;
-          updated_at?: string;
         };
         Update: {
           name?: string;
@@ -105,6 +107,7 @@ export interface Database {
           is_consulting?: boolean;
           is_active?: boolean;
           billing_day?: number | null;
+          share_token?: string | null;
           plan_duration?: number | null;
           total_value?: number | null;
           next_billing_date?: string | null;
@@ -135,8 +138,6 @@ export interface Database {
           session_done?: boolean;
           muscle_groups?: string[];
           notes?: string | null;
-          created_at?: string;
-          updated_at?: string;
         };
         Update: {
           student_id?: string;
@@ -168,7 +169,6 @@ export interface Database {
           front_url?: string | null;
           side_url?: string | null;
           back_url?: string | null;
-          created_at?: string;
         };
         Update: {
           date?: string;
@@ -206,7 +206,6 @@ export interface Database {
           visceral_fat: number;
           lean_mass: number;
           muscle_pct: number;
-          created_at?: string;
         };
         Update: {
           date?: string;
@@ -259,7 +258,6 @@ export interface Database {
           sf_subscapular?: number;
           sf_suprailiac?: number;
           sf_abdominal?: number;
-          created_at?: string;
         };
         Update: {
           date?: string;
@@ -299,7 +297,6 @@ export interface Database {
           paid_at?: string | null;
           status?: 'pending' | 'paid' | 'overdue';
           month_ref: string;
-          created_at?: string;
         };
         Update: {
           amount?: number;
@@ -310,15 +307,24 @@ export interface Database {
       };
     };
     Views: {};
-    Functions: {};
-    Enums: {};
+    Functions: {
+      has_role: {
+        Args: { _user_id: string; _role: 'admin' | 'user' };
+        Returns: boolean;
+      };
+    };
+    Enums: {
+      app_role: 'admin' | 'user';
+    };
   };
 }
 
-// Helper types for easier usage
+// Helper types
 export type Profile = Database['public']['Tables']['profiles']['Row'];
 export type ProfileInsert = Database['public']['Tables']['profiles']['Insert'];
 export type ProfileUpdate = Database['public']['Tables']['profiles']['Update'];
+
+export type UserRole = Database['public']['Tables']['user_roles']['Row'];
 
 export type DbStudent = Database['public']['Tables']['students']['Row'];
 export type DbStudentInsert = Database['public']['Tables']['students']['Insert'];

@@ -1,6 +1,8 @@
-import React from 'react';
-import { Crown, Check, X, Zap, Users, TrendingUp, DollarSign, Download, Headphones, Calendar } from 'lucide-react';
+import React, { useState } from 'react';
+import { Crown, Check, X, Zap, Users, TrendingUp, DollarSign, Download, Headphones, Calendar, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
+import { STRIPE_PLANS, StripePlanKey } from '../lib/stripe';
 
 interface PricingPlansProps {
   onClose: () => void;
@@ -25,11 +27,30 @@ const FEATURE_LABELS: Record<string, string> = {
 };
 
 const PricingPlans: React.FC<PricingPlansProps> = ({ onClose, highlightFeature }) => {
-  const { upgradeToPremium, isPremium } = useAuth();
+  const { isPremium, refreshSubscription } = useAuth();
+  const [selectedPlan, setSelectedPlan] = useState<StripePlanKey>('yearly');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleUpgrade = () => {
-    upgradeToPremium();
-    onClose();
+  const handleCheckout = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      const plan = STRIPE_PLANS[selectedPlan];
+      const { data, error: fnError } = await supabase.functions.invoke('create-checkout', {
+        body: { priceId: plan.price_id },
+      });
+      if (fnError) throw new Error(fnError.message);
+      if (data?.url) {
+        window.open(data.url, '_blank');
+        setTimeout(() => refreshSubscription(), 5000);
+        onClose();
+      }
+    } catch (err: any) {
+      setError(err.message || 'Erro ao iniciar pagamento');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -38,10 +59,7 @@ const PricingPlans: React.FC<PricingPlansProps> = ({ onClose, highlightFeature }
 
         {/* Header */}
         <div className="relative px-6 pt-6 pb-6 flex-shrink-0" style={{background:'var(--n-50)',borderBottom:'1px solid var(--n-200)'}}>
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 p-1.5 rounded-lg hover:bg-black/5 transition-colors touch-manipulation"
-          >
+          <button onClick={onClose} className="absolute top-4 right-4 p-1.5 rounded-lg hover:bg-black/5 transition-colors touch-manipulation">
             <X size={16} style={{color:'var(--n-400)'}} />
           </button>
           <div className="flex items-center gap-3 mb-3">
@@ -63,88 +81,84 @@ const PricingPlans: React.FC<PricingPlansProps> = ({ onClose, highlightFeature }
           )}
         </div>
 
-        {/* Scrollable content */}
+        {/* Content */}
         <div className="overflow-y-auto flex-1 px-6 py-5 space-y-4">
-
-          {/* Price */}
-          <div className="flex items-center justify-between rounded-xl px-4 py-3" style={{background:'var(--n-50)',border:'1px solid var(--n-200)'}}>
-            <div>
-              <div className="text-2xl font-extrabold" style={{color:'var(--n-900)'}}>R$ 24,99</div>
-              <div className="text-xs" style={{color:'var(--n-500)'}}>por mês · cancele quando quiser</div>
-            </div>
-            <div className="text-xs font-bold px-2.5 py-1 rounded-lg" style={{background:'var(--success-light)',color:'var(--success)',border:'1px solid var(--success)'}}>
-              7 dias grátis
-            </div>
+          {/* Plan selection */}
+          <div className="flex gap-2">
+            {(['monthly', 'yearly'] as StripePlanKey[]).map(key => {
+              const plan = STRIPE_PLANS[key];
+              const isSelected = selectedPlan === key;
+              return (
+                <button
+                  key={key}
+                  onClick={() => setSelectedPlan(key)}
+                  className="flex-1 rounded-xl p-3 text-center transition-all"
+                  style={{
+                    background: isSelected ? 'var(--accent-light)' : 'var(--n-0)',
+                    border: isSelected ? '2px solid var(--accent)' : '1.5px solid var(--n-200)',
+                  }}
+                >
+                  <div className="text-xs font-bold" style={{color: isSelected ? 'var(--accent)' : 'var(--n-500)'}}>{plan.name}</div>
+                  <div className="text-lg font-extrabold mt-1" style={{color:'var(--n-900)'}}>{plan.price}</div>
+                  <div className="text-[10px]" style={{color:'var(--n-500)'}}>{plan.description}</div>
+                  {key === 'yearly' && (
+                    <div className="text-[10px] font-bold mt-1 px-2 py-0.5 rounded-full inline-block" style={{background:'var(--success-light)',color:'var(--success)'}}>
+                      {STRIPE_PLANS.yearly.savings}
+                    </div>
+                  )}
+                </button>
+              );
+            })}
           </div>
 
           {/* Feature comparison */}
           <div className="rounded-xl overflow-hidden" style={{border:'1px solid var(--n-200)'}}>
             <div className="grid grid-cols-3 px-4 py-2.5 text-xs font-bold uppercase tracking-wider" style={{background:'var(--n-50)',borderBottom:'1px solid var(--n-200)',color:'var(--n-500)'}}>
-              <span className="col-span-1">Recurso</span>
+              <span>Recurso</span>
               <span className="text-center">Gratuito</span>
               <span className="text-center" style={{color:'var(--accent)'}}>Premium</span>
             </div>
-            <div>
-              {FEATURES.map((feat, i) => {
-                const Icon = feat.icon;
-                const isHighlighted = highlightFeature === feat.key;
-                return (
-                  <div
-                    key={feat.key}
-                    className="grid grid-cols-3 items-center px-4 py-3 transition-colors"
-                    style={{
-                      background: isHighlighted ? 'var(--accent-light)' : 'var(--n-0)',
-                      borderBottom: i < FEATURES.length - 1 ? '1px solid var(--n-100)' : 'none'
-                    }}
-                  >
-                    <div className="flex items-center gap-2 col-span-1">
-                      <Icon size={14} style={{color: isHighlighted ? 'var(--accent)' : 'var(--n-400)'}} />
-                      <span className="text-xs font-semibold" style={{color: isHighlighted ? 'var(--accent)' : 'var(--n-600)'}}>
-                        {feat.label}
-                      </span>
-                    </div>
-                    <div className="flex justify-center">
-                      {typeof feat.free === 'string' ? (
-                        <span className="text-xs" style={{color:'var(--n-500)'}}>{feat.free}</span>
-                      ) : feat.free ? (
-                        <Check size={15} style={{color:'var(--success)'}} />
-                      ) : (
-                        <X size={15} style={{color:'var(--n-300)'}} />
-                      )}
-                    </div>
-                    <div className="flex justify-center">
-                      {typeof feat.premium === 'string' ? (
-                        <span className="text-xs font-bold" style={{color:'var(--accent)'}}>{feat.premium}</span>
-                      ) : (
-                        <Check size={15} style={{color:'var(--accent)'}} />
-                      )}
-                    </div>
+            {FEATURES.map((feat, i) => {
+              const Icon = feat.icon;
+              const isHighlighted = highlightFeature === feat.key;
+              return (
+                <div key={feat.key} className="grid grid-cols-3 items-center px-4 py-3"
+                  style={{ background: isHighlighted ? 'var(--accent-light)' : 'var(--n-0)', borderBottom: i < FEATURES.length - 1 ? '1px solid var(--n-100)' : 'none' }}>
+                  <div className="flex items-center gap-2">
+                    <Icon size={14} style={{color: isHighlighted ? 'var(--accent)' : 'var(--n-400)'}} />
+                    <span className="text-xs font-semibold" style={{color: isHighlighted ? 'var(--accent)' : 'var(--n-600)'}}>{feat.label}</span>
                   </div>
-                );
-              })}
-            </div>
+                  <div className="flex justify-center">
+                    {typeof feat.free === 'string' ? <span className="text-xs" style={{color:'var(--n-500)'}}>{feat.free}</span>
+                      : feat.free ? <Check size={15} style={{color:'var(--success)'}} /> : <X size={15} style={{color:'var(--n-300)'}} />}
+                  </div>
+                  <div className="flex justify-center">
+                    {typeof feat.premium === 'string' ? <span className="text-xs font-bold" style={{color:'var(--accent)'}}>{feat.premium}</span>
+                      : <Check size={15} style={{color:'var(--accent)'}} />}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 
         {/* CTA */}
         <div className="px-6 pb-6 pt-3 flex-shrink-0" style={{borderTop:'1px solid var(--n-200)'}}>
+          {error && (
+            <div className="rounded-lg px-3 py-2 mb-2" style={{background:'var(--error-light)',border:'1px solid var(--error)'}}>
+              <p className="text-xs" style={{color:'var(--error)'}}>{error}</p>
+            </div>
+          )}
           {isPremium ? (
             <div className="flex items-center justify-center gap-2 text-sm py-3 rounded-lg" style={{background:'var(--success-light)',color:'var(--success)'}}>
-              <Check size={16} />
-              <span>Você já é Premium!</span>
+              <Check size={16} /> Você já é Premium!
             </div>
           ) : (
             <>
-              <button
-                onClick={handleUpgrade}
-                className="btn btn-primary w-full py-3.5 font-extrabold text-sm mb-2"
-              >
-                Começar 7 dias grátis
+              <button onClick={handleCheckout} disabled={loading} className="btn btn-primary w-full py-3.5 font-extrabold text-sm mb-2 disabled:opacity-50">
+                {loading ? <Loader2 size={18} className="animate-spin" /> : `Assinar ${STRIPE_PLANS[selectedPlan].name}`}
               </button>
-              <button
-                onClick={onClose}
-                className="w-full py-2 text-sm transition-colors touch-manipulation" style={{color:'var(--n-500)'}}
-              >
+              <button onClick={onClose} className="w-full py-2 text-sm transition-colors touch-manipulation" style={{color:'var(--n-500)'}}>
                 Continuar com o plano gratuito
               </button>
             </>

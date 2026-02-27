@@ -81,21 +81,35 @@ const fmt = (d: string) => {
 
 type PaymentMethod = "pix" | "wallet" | "card" | null;
 
+const DEFAULT_NOTIFICATIONS = {
+  enabled: true,
+  notifyBefore: true,
+  notifyAtTime: true,
+  dailyListTime: '08:00',
+};
+
+const getStoredNotifications = () => {
+  try {
+    const stored = localStorage.getItem('fitpro-notifications');
+    return stored ? JSON.parse(stored) : DEFAULT_NOTIFICATIONS;
+  } catch { return DEFAULT_NOTIFICATIONS; }
+};
+
 const UserPanel: React.FC = () => {
   const {
     currentUser,
     updateUser,
     isPremium,
-    upgradeToPremium,
-    downgradeToFree,
     logout,
+    refreshSubscription,
   } = useAuth();
-  const planLimits = PLAN_LIMITS[currentUser.plan];
+  const planLimits = PLAN_LIMITS[currentUser.subscriptionStatus] || PLAN_LIMITS.free;
 
   const { students } = useStudents();
   const { appointments } = useAppointments();
 
   const [editingNotifications, setEditingNotifications] = useState(false);
+  const [notifications, setNotifications] = useState(getStoredNotifications);
 
   // Subscription flow state
   const [subExpanded, setSubExpanded] = useState(false);
@@ -133,15 +147,12 @@ const UserPanel: React.FC = () => {
     }));
 
   const handleNotificationChange = (
-    field: keyof typeof currentUser.notifications,
+    field: string,
     value: any,
   ) => {
-    updateUser({
-      notifications: {
-        ...currentUser.notifications,
-        [field]: value,
-      },
-    });
+    const updated = { ...notifications, [field]: value };
+    setNotifications(updated);
+    localStorage.setItem('fitpro-notifications', JSON.stringify(updated));
   };
 
   const initials = currentUser.name
@@ -928,7 +939,7 @@ const UserPanel: React.FC = () => {
                 className="p-2 rounded-lg"
                 style={{ background: "var(--warning-light)" }}
               >
-                {currentUser.notifications.enabled ? (
+                {notifications.enabled ? (
                   <Bell size={18} style={{ color: "var(--warning)" }} />
                 ) : (
                   <BellOff size={18} style={{ color: "var(--n-400)" }} />
@@ -955,30 +966,30 @@ const UserPanel: React.FC = () => {
               {[
                 {
                   label: "Status",
-                  value: currentUser.notifications.enabled
+                  value: notifications.enabled
                     ? "Ativas"
                     : "Inativas",
-                  highlight: currentUser.notifications.enabled,
+                  highlight: notifications.enabled,
                 },
-                ...(currentUser.notifications.enabled
+                ...(notifications.enabled
                   ? [
                       {
                         label: "Notificar 15min antes",
-                        value: currentUser.notifications.notifyBefore
+                        value: notifications.notifyBefore
                           ? "Sim"
                           : "Não",
-                        highlight: currentUser.notifications.notifyBefore,
+                        highlight: notifications.notifyBefore,
                       },
                       {
                         label: "Notificar na hora",
-                        value: currentUser.notifications.notifyAtTime
+                        value: notifications.notifyAtTime
                           ? "Sim"
                           : "Não",
-                        highlight: currentUser.notifications.notifyAtTime,
+                        highlight: notifications.notifyAtTime,
                       },
                       {
                         label: "Listagem diária",
-                        value: currentUser.notifications.dailyListTime,
+                        value: notifications.dailyListTime,
                         highlight: true,
                       },
                     ]
@@ -1007,19 +1018,19 @@ const UserPanel: React.FC = () => {
                 {
                   label: "Ativar notificações",
                   field: "enabled" as const,
-                  value: currentUser.notifications.enabled,
+                  value: notifications.enabled,
                 },
-                ...(currentUser.notifications.enabled
+                ...(notifications.enabled
                   ? [
                       {
                         label: "Notificar 15min antes",
                         field: "notifyBefore" as const,
-                        value: currentUser.notifications.notifyBefore,
+                        value: notifications.notifyBefore,
                       },
                       {
                         label: "Notificar na hora",
                         field: "notifyAtTime" as const,
-                        value: currentUser.notifications.notifyAtTime,
+                        value: notifications.notifyAtTime,
                       },
                     ]
                   : []),
@@ -1042,7 +1053,7 @@ const UserPanel: React.FC = () => {
                 </label>
               ))}
 
-              {currentUser.notifications.enabled && (
+              {notifications.enabled && (
                 <div>
                   <label
                     className="block text-xs font-semibold uppercase tracking-wider mb-1.5"
@@ -1052,7 +1063,7 @@ const UserPanel: React.FC = () => {
                   </label>
                   <input
                     type="time"
-                    value={currentUser.notifications.dailyListTime}
+                    value={notifications.dailyListTime}
                     onChange={(e) =>
                       handleNotificationChange("dailyListTime", e.target.value)
                     }
@@ -1081,75 +1092,7 @@ const UserPanel: React.FC = () => {
           Sair da conta
         </button>
 
-        {/* Dev Tools */}
-        {currentUser?.isAdmin && (
-          <div
-            className="rounded-xl p-4"
-            style={{
-              border: "1px dashed var(--n-300)",
-              background: "var(--n-50)",
-            }}
-          >
-            <div className="flex items-center gap-2 mb-3">
-              <FlaskConical size={15} style={{ color: "var(--n-400)" }} />
-              <span
-                className="text-xs font-semibold uppercase tracking-wide"
-                style={{ color: "var(--n-400)" }}
-              >
-                Dev — Simular plano
-              </span>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => downgradeToFree()}
-                className="flex-1 py-2 rounded-lg text-xs font-semibold transition-all touch-manipulation"
-                style={
-                  !isPremium && !currentUser.isAdmin
-                    ? { background: "var(--accent)", color: "var(--n-0)" }
-                    : {
-                        background: "var(--n-100)",
-                        color: "var(--n-500)",
-                        border: "1px solid var(--n-200)",
-                      }
-                }
-              >
-                Gratuito
-              </button>
-              <button
-                onClick={() => upgradeToPremium()}
-                className="flex-1 py-2 rounded-lg text-xs font-semibold transition-all touch-manipulation"
-                style={
-                  isPremium && !currentUser.isAdmin
-                    ? { background: "#8b5cf6", color: "var(--n-0)" }
-                    : {
-                        background: "var(--n-100)",
-                        color: "var(--n-500)",
-                        border: "1px solid var(--n-200)",
-                      }
-                }
-              >
-                <Crown size={11} className="inline mr-1" />
-                Premium
-              </button>
-              <button
-                onClick={() => updateUser({ isAdmin: !currentUser.isAdmin })}
-                className="flex-1 py-2 rounded-lg text-xs font-semibold transition-all touch-manipulation"
-                style={
-                  currentUser.isAdmin
-                    ? { background: "var(--error)", color: "var(--n-0)" }
-                    : {
-                        background: "var(--n-100)",
-                        color: "var(--n-500)",
-                        border: "1px solid var(--n-200)",
-                      }
-                }
-              >
-                <Shield size={11} className="inline mr-1" />
-                Admin
-              </button>
-            </div>
-          </div>
-        )}
+        {/* Dev Tools - removed, admin managed via user_roles */}
       </div>
     </div>
   );
