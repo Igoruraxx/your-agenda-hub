@@ -33,11 +33,18 @@ const EMPTY_USER: User = {
 
 function profileToUser(profile: Profile): User {
   return {
-    id: profile.id, name: profile.name, email: profile.email,
-    plan: profile.plan as UserPlan, isAdmin: profile.is_admin,
+    id: profile.id, 
+    name: profile.name, 
+    email: profile.email,
+    role: profile.role,
+    parentProfileId: profile.parent_id ?? undefined,
+    plan: profile.plan as UserPlan, 
+    isAdmin: profile.is_admin,
     notifications: {
-      enabled: profile.notifications_enabled, notifyBefore: profile.notify_before,
-      notifyAtTime: profile.notify_at_time, dailyListTime: profile.daily_list_time,
+      enabled: profile.notifications_enabled, 
+      notifyBefore: profile.notify_before,
+      notifyAtTime: profile.notify_at_time, 
+      dailyListTime: profile.daily_list_time,
     },
   };
 }

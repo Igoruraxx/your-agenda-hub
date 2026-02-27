@@ -4,9 +4,9 @@
 
 @layer base {
   :root {
-    /* FitPro Design System */
-    --background: 226 30% 96%;
-    --foreground: 224 30% 10%;
+    /* MFIT-Inspired Brutal Precision System */
+    --background: 0 0% 100%;
+    --foreground: 220 20% 15%;
 
     --card: 0 0% 100%;
     --card-foreground: 224 30% 10%;
@@ -14,18 +14,18 @@
     --popover: 0 0% 100%;
     --popover-foreground: 224 30% 10%;
 
-    --primary: 234 89% 63%;
+    --primary: 142 71% 45%; /* emerald matte */
     --primary-foreground: 0 0% 100%;
 
     --secondary: 230 25% 93%;
     --secondary-foreground: 224 30% 10%;
 
-    --muted: 226 25% 93%;
-    --muted-foreground: 220 10% 46%;
+    --muted: 210 10% 95%;
+    --muted-foreground: 220 10% 50%;
 
-    --accent: 234 89% 63%;
-    --accent-foreground: 0 0% 100%;
-    --accent-light: 234 89% 95%;
+    --accent: 38 92% 50%; /* amber sharp */
+    --accent-foreground: 220 20% 15%;
+    --accent-light: 38 92% 80%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
@@ -42,25 +42,25 @@
     --input: 220 13% 91%;
     --ring: 234 89% 63%;
 
-    --radius: 0.75rem;
+    --radius: 0.25rem; /* sharp brutal */
 
-    /* Neutral scale */
+    /* Neutral scale matte */
     --n-0: 0 0% 100%;
-    --n-50: 226 30% 98%;
-    --n-100: 226 30% 96%;
-    --n-200: 220 13% 91%;
-    --n-300: 220 10% 84%;
-    --n-400: 220 8% 65%;
-    --n-500: 220 8% 46%;
-    --n-600: 220 10% 38%;
-    --n-700: 220 12% 28%;
-    --n-800: 224 20% 18%;
-    --n-900: 224 30% 10%;
+    --n-50: 210 10% 99%;
+    --n-100: 210 10% 98%;
+    --n-200: 215 14% 95%;
+    --n-300: 215 14% 92%;
+    --n-400: 220 13% 87%;
+    --n-500: 220 14% 79%;
+    --n-600: 220 15% 69%;
+    --n-700: 220 18% 56%;
+    --n-800: 222 18% 44%;
+    --n-900: 220 20% 15%;
 
-    /* Shadows */
-    --sh-sm: 0 1px 2px 0 hsl(224 30% 10% / 0.05);
-    --sh-md: 0 4px 6px -1px hsl(224 30% 10% / 0.08), 0 2px 4px -2px hsl(224 30% 10% / 0.05);
-    --sh-lg: 0 10px 15px -3px hsl(224 30% 10% / 0.08), 0 4px 6px -4px hsl(224 30% 10% / 0.03);
+    /* Shadows subtle sharp */
+    --sh-sm: 0 1px 3px 0 hsl(220 20% 15% / 0.08);
+    --sh-md: 0 4px 8px -2px hsl(220 20% 15% / 0.1), 0 2px 4px -1px hsl(220 20% 15% / 0.06);
+    --sh-lg: 0 12px 20px -4px hsl(220 20% 15% / 0.12), 0 6px 12px -2px hsl(220 20% 15% / 0.08);
 
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
@@ -135,7 +135,7 @@
     background: hsl(var(--card));
     border: 1px solid hsl(var(--border));
     box-shadow: var(--sh-sm);
-    @apply rounded-2xl;
+    @apply rounded-[2px];
   }
 
   .safe-area-pt {
@@ -154,7 +154,22 @@
   }
 
   .animate-fade-in-up {
-    animation: fadeInUp 0.2s ease-out both;
+    animation: fadeInUp 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+  }
+
+  .animate-stagger-reveal {
+    animation: staggerReveal 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+
+  .hover-spring {
+    transition: transform 0.2s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  }
+  .hover-spring:hover {
+    animation: springHover 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  }
+
+  .parallax-rail {
+    transition: transform 0.1s linear;
   }
 
   .touch-manipulation {

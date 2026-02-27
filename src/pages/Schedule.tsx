@@ -49,22 +49,22 @@ function DraggableCard({ apt, onMarkDone, onDelete, onWhatsApp }: {
   };
 
   return (
-    <div ref={setNodeRef} style={style} className={`card-surface p-3 ${apt.sessionDone ? 'opacity-60' : ''}`}>
+    <div ref={setNodeRef} style={style} className={`group relative rounded-[2px] bg-card/95 backdrop-blur-sm border border-border/50 shadow-lg hover:shadow-2xl p-4 hover-spring transition-all duration-300 z-10 ${apt.sessionDone ? 'opacity-75 ring-2 ring-muted/50' : ''} ${isDragging ? 'shadow-2xl scale-[1.02] ring-4 ring-accent/30 z-20 translate-y-[-2px] parallax-drag' : ''}`}>
       <div className="flex items-center gap-2">
-        <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing touch-none p-1 text-muted-foreground">
-          <GripVertical size={14} />
+        <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing touch-none p-1.5 text-muted-foreground group-hover:scale-110 group-hover:text-accent transition-all duration-200 hover-spring rounded-[1px]">
+          <GripVertical size={14} strokeWidth={2.5} />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-primary">{apt.time}</span>
-            <span className="text-sm font-bold text-foreground truncate">{apt.studentName}</span>
+            <span className="text-xs font-black tracking-wider text-primary">{apt.time}</span>
+            <span className="text-base font-black text-foreground truncate leading-tight">{apt.studentName}</span>
           </div>
           {apt.muscleGroups && apt.muscleGroups.length > 0 && (
-            <div className="flex gap-1 mt-1 flex-wrap">
+            <div className="flex gap-1 mt-2 flex-wrap">
               {apt.muscleGroups.map(mg => {
                 const group = MUSCLE_GROUPS.find(g => g.id === mg);
                 return group ? (
-                  <span key={mg} className="text-[10px] bg-accent-light text-primary px-1 py-0.5 rounded font-medium">
+                  <span key={mg} className="text-[11px] rounded-[1px] bg-accent/20 text-accent px-2 py-1 font-bold shadow-sm hover:bg-accent/40 transition-all hover-spring">
                     {group.emoji} {group.label}
                   </span>
                 ) : null;
@@ -72,16 +72,20 @@ function DraggableCard({ apt, onMarkDone, onDelete, onWhatsApp }: {
             </div>
           )}
         </div>
-        <div className="flex gap-0.5 shrink-0">
+        <div className="flex gap-1 shrink-0">
           {!apt.sessionDone && (
-            <button onClick={() => onMarkDone(apt)} className="btn btn-ghost p-1.5 text-success"><CheckCircle2 size={16} /></button>
+            <button onClick={() => onMarkDone(apt)} className="p-2 rounded-[2px] hover:bg-accent/20 hover:text-accent hover-spring text-success transition-all shadow-sm">
+              <CheckCircle2 size={16} strokeWidth={2.5} />
+            </button>
           )}
           {onWhatsApp && (
-            <a href={onWhatsApp} target="_blank" rel="noopener noreferrer" className="btn btn-ghost p-1.5 text-success" onClick={e => e.stopPropagation()}>
-              <MessageCircle size={16} />
+            <a href={onWhatsApp} target="_blank" rel="noopener noreferrer" className="p-2 rounded-[2px] hover:bg-accent/20 hover:text-accent hover-spring text-success transition-all shadow-sm" onClick={e => e.stopPropagation()}>
+              <MessageCircle size={16} strokeWidth={2.5} />
             </a>
           )}
-          <button onClick={() => onDelete(apt.id)} className="btn btn-ghost p-1.5 text-destructive"><X size={16} /></button>
+          <button onClick={() => onDelete(apt.id)} className="p-2 rounded-[2px] hover:bg-destructive/10 hover:text-destructive hover-spring text-destructive transition-all shadow-sm">
+            <X size={16} strokeWidth={2.5} />
+          </button>
         </div>
       </div>
     </div>
@@ -186,49 +190,53 @@ const Schedule: React.FC = () => {
   const renderDayView = () => (
     <>
       {/* Week strip */}
-      <div className="flex gap-1 mb-4">
-        {weekDays.map(day => {
+      <div className="flex gap-1 mb-6 stagger-reveal">
+        {weekDays.map((day, index) => {
           const isSelected = format(day, 'yyyy-MM-dd') === format(selectedDate, 'yyyy-MM-dd');
           const isTodayDate = isToday(day);
           const dayKey = format(day, 'yyyy-MM-dd');
           const count = (appointments[dayKey] || []).length;
           return (
             <button key={day.toISOString()} onClick={() => setSelectedDate(day)}
-              className={`flex-1 flex flex-col items-center py-2 rounded-xl transition-all duration-150 ${isSelected ? 'bg-primary text-primary-foreground' : isTodayDate ? 'bg-accent-light text-primary' : 'bg-card text-muted-foreground'}`}>
-              <span className="text-[10px] font-bold uppercase">{format(day, 'EEE', { locale: ptBR }).slice(0, 3)}</span>
-              <span className="text-lg font-bold">{format(day, 'd')}</span>
-              {count > 0 && <div className={`w-1.5 h-1.5 rounded-full mt-0.5 ${isSelected ? 'bg-primary-foreground' : 'bg-primary'}`} />}
+              className={`flex-1 flex flex-col items-center py-3 px-2 rounded-[2px] transition-all duration-300 shadow-sm hover:shadow-md hover-spring font-black text-xs tracking-wider uppercase ${isSelected ? 'bg-primary text-primary-foreground shadow-primary/25' : isTodayDate ? 'bg-accent text-accent-foreground shadow-accent/25' : 'bg-card/80 text-muted-foreground hover:bg-card hover:text-foreground border border-border/50'}`}
+              style={{ '--stagger-index': index } as React.CSSProperties}
+            >
+              <span className="text-[10px]">{format(day, 'EEE', { locale: ptBR }).slice(0, 3)}</span>
+              <span className="text-xl leading-none">{format(day, 'd')}</span>
+              {count > 0 && <div className={`w-2 h-2 rounded-[1px] mt-1 shadow-sm ${isSelected ? 'bg-primary-foreground' : 'bg-accent'}`} />}
             </button>
           );
         })}
       </div>
 
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-lg font-bold text-foreground">{format(selectedDate, "EEEE, dd 'de' MMMM", { locale: ptBR })}</h2>
-        <button onClick={() => openNewModal()} className="btn btn-primary px-3 py-2 text-xs"><Plus size={14} /> Novo</button>
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-2xl font-black tracking-[-0.05em] leading-tight text-foreground">{format(selectedDate, "EEEE, dd 'de' MMMM", { locale: ptBR })}</h2>
+        <button onClick={() => openNewModal()} className="flex items-center gap-2 px-4 py-3 rounded-[2px] bg-primary text-primary-foreground hover-spring hover:scale-[1.02] shadow-lg hover:shadow-primary/25 font-black text-sm tracking-wider uppercase transition-all duration-200 border border-primary/20">
+          <Plus size={16} strokeWidth={2.5} /> Novo
+        </button>
       </div>
 
       {/* Grid diário com slots 05-22h */}
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <div className="space-y-0">
-          {TIME_SLOTS.map(time => {
+        <div className="space-y-px stagger-reveal-container pt-2">
+          {TIME_SLOTS.map((time, index) => {
             const slotApts = dayAppointments.filter(a => a.time === time);
             const droppableId = `${dateKey}_${time}`;
             return (
-              <div key={time} className="flex border-b border-border/30">
-                <div className="w-14 shrink-0 py-2 pr-2 text-right">
-                  <span className="text-[11px] font-bold text-muted-foreground">{time}</span>
+              <div key={time} className="group stagger-item flex items-stretch border-b border-border/20 hover:border-accent/30 transition-colors bg-card/50 hover:bg-card/70 backdrop-blur-sm rounded-[2px] overflow-hidden shadow-sm hover:shadow-md hover-spring" style={{ '--stagger-index': index } as React.CSSProperties}>
+                <div className="w-16 shrink-0 flex items-center justify-end pr-3 pl-1 bg-border/20">
+                  <span className="text-xs font-black tracking-widest text-muted-foreground uppercase">{time}</span>
                 </div>
                 <DroppableSlot id={droppableId} onClick={() => slotApts.length === 0 && openNewModal(dateKey, time)}>
                   {slotApts.length > 0 ? (
-                    <div className="space-y-1 py-1">
+                    <div className="space-y-1.5 p-2 pt-1.5 flex-1">
                       {slotApts.map(apt => (
                         <DraggableCard key={apt.id} apt={apt} onMarkDone={openDoneModal} onDelete={handleDelete} onWhatsApp={getStudentPhone(apt.studentId)} />
                       ))}
                     </div>
                   ) : (
-                    <div className="py-3 text-center">
-                      <span className="text-[10px] text-muted-foreground/50">+ agendar</span>
+                    <div className="flex items-center justify-center flex-1 py-6 text-center group-hover:text-accent transition-colors">
+                      <span className="text-xs font-bold tracking-wider uppercase text-muted-foreground/70 group-hover-spring">+ agendar às {time}</span>
                     </div>
                   )}
                 </DroppableSlot>
@@ -325,15 +333,15 @@ const Schedule: React.FC = () => {
   return (
     <div className="px-4 py-4">
       {/* View mode toggle */}
-      <div className="flex gap-1 mb-4">
+      <div className="flex gap-1 mb-6">
         {([
-          { id: 'day' as ViewMode, label: 'Dia', icon: CalendarDays },
-          { id: 'week' as ViewMode, label: 'Semana', icon: LayoutGrid },
-          { id: 'list' as ViewMode, label: 'Lista', icon: List },
+          { id: 'day' as ViewMode, label: 'DIA', icon: CalendarDays },
+          { id: 'week' as ViewMode, label: 'SEMANA', icon: LayoutGrid },
+          { id: 'list' as ViewMode, label: 'LISTA', icon: List },
         ]).map(v => (
           <button key={v.id} onClick={() => setViewMode(v.id)}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold transition-all ${viewMode === v.id ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
-            <v.icon size={14} />{v.label}
+            className={`flex-1 flex items-center justify-center gap-2 py-4 px-3 rounded-[2px] font-black text-sm tracking-wider uppercase transition-all shadow-sm hover:shadow-lg hover-spring ${viewMode === v.id ? 'bg-primary text-primary-foreground shadow-primary/30 ring-2 ring-primary/40' : 'bg-card/80 text-muted-foreground hover:bg-card hover:text-foreground border border-border/50 hover:border-accent/50'}`}>
+            <v.icon size={18} strokeWidth={2.5} />{v.label}
           </button>
         ))}
       </div>

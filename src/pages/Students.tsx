@@ -192,7 +192,7 @@ const Students: React.FC = () => {
   const getWhatsAppUrl = (phone: string) => `https://wa.me/${phone.replace(/\D/g, '')}`;
 
   return (
-    <div className="px-4 py-4">
+    <div className="px-4 sm:px-6 lg:px-8 py-8 lg:py-12 min-h-[100dvh] scroll-mt-20 snap-start" data-stagger-index="0">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <Users size={20} className="text-primary" />
@@ -224,35 +224,44 @@ const Students: React.FC = () => {
           <p className="text-sm text-muted-foreground">Nenhum aluno encontrado</p>
         </div>
       ) : (
-        <div className="space-y-2">
-          {filtered.map(student => (
-            <div key={student.id}
-              className={`card-surface p-4 cursor-pointer hover:shadow-md transition-shadow ${!student.isActive ? 'opacity-60' : ''}`}
-              onClick={() => openEdit(student)}>
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-bold text-foreground">{student.name}</p>
+        <div className="space-y-4 lg:space-y-5 pt-4 lg:pt-6">
+          {filtered.map((student, index) => (
+            <div 
+              key={student.id}
+              data-stagger-index={index}
+              className={`group relative rounded-[2px] bg-card/95 backdrop-blur-sm border border-border/50 shadow-lg hover:shadow-2xl p-5 lg:p-6 hover-spring transition-all duration-500 cursor-pointer z-10 hover:z-20 hover:-translate-y-1 hover:scale-[1.005] [&:nth-child(even)]:[-translate-x-6] [&:nth-child(even)]:shadow-[0_25px_50px_-15px_rgba(0,0,0,0.15)] [&:nth-child(even)]:mt-6 [&:nth-child(even)]:z-[25] lg:[&:nth-child(odd)]:z-[10] ${!student.isActive ? 'opacity-75 ring-2 ring-muted/50' : ''}`}
+              onClick={() => openEdit(student)}
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-3 mb-3">
+                    <p className="text-base lg:text-lg font-black tracking-tight text-foreground truncate group-hover:text-accent transition-colors duration-300">{student.name}</p>
                     {student.isConsulting && (
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-warning/20 text-warning">Consultoria</span>
+                      <span className="text-[11px] font-black px-2.5 py-1 rounded-[1px] bg-warning/20 text-warning shadow-sm whitespace-nowrap hover:bg-warning/30 hover-spring transition-all duration-200 hover:scale-[1.05]">Consultoria</span>
                     )}
                   </div>
-                  <div className="flex items-center gap-3 mt-1">
-                    <span className="text-xs text-muted-foreground">
-                      {student.plan === 'monthly' ? 'Mensal' : 'Por sessão'} · R$ {student.value.toFixed(2)}
-                    </span>
-                    <span className="text-xs text-muted-foreground">{student.weeklyFrequency}x/semana</span>
+                  <div className="flex flex-wrap items-center gap-4 text-[12px] font-bold tracking-wide text-muted-foreground uppercase">
+                    <span>{student.plan === 'monthly' ? 'Mensal' : 'Por sessão'} · R$ {student.value.toFixed(2)}</span>
+                    <span>{student.weeklyFrequency}x/semana</span>
                   </div>
                 </div>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-2.5 shrink-0 ml-3">
                   {student.phone && (
-                    <a href={getWhatsAppUrl(student.phone)} target="_blank" rel="noopener noreferrer"
-                      onClick={e => e.stopPropagation()} className="btn btn-ghost p-2">
-                      <MessageCircle size={18} className="text-[#25D366]" />
+                    <a 
+                      href={getWhatsAppUrl(student.phone)} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      onClick={e => e.stopPropagation()} 
+                      className="p-2.5 rounded-[2px] hover:bg-accent/20 hover:text-accent hover-spring shadow-sm text-[#25D366] transition-all group-hover:scale-110 duration-200"
+                    >
+                      <MessageCircle size={18} strokeWidth={2.5} />
                     </a>
                   )}
-                  <button onClick={e => { e.stopPropagation(); handleDelete(student.id); }} className="btn btn-ghost p-2 text-destructive">
-                    <Trash2 size={16} />
+                  <button 
+                    onClick={e => { e.stopPropagation(); handleDelete(student.id); }} 
+                    className="p-2.5 rounded-[2px] hover:bg-destructive/10 hover:text-destructive hover-spring shadow-sm transition-all group-hover:scale-110 duration-200"
+                  >
+                    <Trash2 size={18} strokeWidth={2.5} />
                   </button>
                 </div>
               </div>

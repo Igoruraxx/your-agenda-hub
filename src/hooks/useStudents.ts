@@ -9,6 +9,8 @@ function dbToStudent(row: DbStudent): Student {
     id: row.id,
     name: row.name,
     phone: row.phone,
+    document: row.document ?? undefined,
+    parentId: row.parent_id ?? undefined,
     plan: row.plan as 'monthly' | 'session',
     value: Number(row.value),
     weeklyFrequency: row.weekly_frequency,
@@ -17,7 +19,7 @@ function dbToStudent(row: DbStudent): Student {
     isConsulting: row.is_consulting,
     isActive: row.is_active,
     billingDay: row.billing_day ?? undefined,
-    shareToken: (row as any).share_token ?? undefined,
+    shareToken: row.share_token ?? undefined,
   };
 }
 
@@ -41,6 +43,8 @@ function studentToUpdate(updates: Partial<Student>): DbStudentUpdate {
   const u: DbStudentUpdate = {};
   if (updates.name !== undefined) u.name = updates.name;
   if (updates.phone !== undefined) u.phone = updates.phone;
+  if (updates.document !== undefined) u.document = updates.document ?? null;
+  if (updates.parentId !== undefined) u.parent_id = updates.parentId ?? null;
   if (updates.plan !== undefined) u.plan = updates.plan;
   if (updates.value !== undefined) u.value = updates.value;
   if (updates.weeklyFrequency !== undefined) u.weekly_frequency = updates.weeklyFrequency;
@@ -49,6 +53,7 @@ function studentToUpdate(updates: Partial<Student>): DbStudentUpdate {
   if (updates.isConsulting !== undefined) u.is_consulting = updates.isConsulting;
   if (updates.isActive !== undefined) u.is_active = updates.isActive;
   if (updates.billingDay !== undefined) u.billing_day = updates.billingDay ?? null;
+  if (updates.shareToken !== undefined) u.share_token = updates.shareToken ?? null;
   return u;
 }
 

@@ -9,6 +9,8 @@ export interface Database {
           name: string;
           email: string;
           phone: string | null;
+          role: 'admin_master' | 'cliente_pessoal' | 'sub_cliente';
+          parent_id: string | null;
           plan: 'free' | 'premium';
           is_admin: boolean;
           notifications_enabled: boolean;
@@ -26,6 +28,8 @@ export interface Database {
           name: string;
           email: string;
           phone?: string | null;
+          role?: 'admin_master' | 'cliente_pessoal' | 'sub_cliente';
+          parent_id?: string | null;
           plan?: 'free' | 'premium';
           is_admin?: boolean;
           notifications_enabled?: boolean;
@@ -43,6 +47,8 @@ export interface Database {
           name?: string;
           email?: string;
           phone?: string | null;
+          role?: 'admin_master' | 'cliente_pessoal' | 'sub_cliente';
+          parent_id?: string | null;
           plan?: 'free' | 'premium';
           is_admin?: boolean;
           notifications_enabled?: boolean;
@@ -69,6 +75,9 @@ export interface Database {
           is_consulting: boolean;
           is_active: boolean;
           billing_day: number | null;
+          parent_id: string | null;
+          document: string | null;
+          share_token: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -85,6 +94,9 @@ export interface Database {
           is_consulting?: boolean;
           is_active?: boolean;
           billing_day?: number | null;
+          parent_id?: string | null;
+          document?: string | null;
+          share_token?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -99,6 +111,9 @@ export interface Database {
           is_consulting?: boolean;
           is_active?: boolean;
           billing_day?: number | null;
+          parent_id?: string | null;
+          document?: string | null;
+          share_token?: string | null;
           updated_at?: string;
         };
       };

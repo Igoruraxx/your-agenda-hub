@@ -123,40 +123,72 @@ const Evolution: React.FC = () => {
     <FeatureGate allowed={canAccessEvolution} title="Módulo de Evolução" description="Acompanhe a evolução dos seus alunos com fotos, bioimpedância e medidas corporais.">
       <div className="px-4 py-4">
         {/* Student selector */}
-        <div className="relative mb-4">
-          <button onClick={() => setShowStudentDropdown(!showStudentDropdown)} className="w-full flex items-center justify-between card-surface px-4 py-3">
-            <div className="flex items-center gap-2">
-              <User size={16} className="text-primary" />
-              <span className="text-sm font-bold text-foreground">{selectedStudent?.name || 'Todos os alunos'}</span>
-            </div>
-            <ChevronDown size={16} className="text-muted-foreground" />
-          </button>
-          {showStudentDropdown && (
-            <div className="absolute top-full left-0 right-0 mt-1 card-surface rounded-xl shadow-lg z-20 max-h-60 overflow-y-auto">
-              <button onClick={() => { setSelectedStudentId(''); setShowStudentDropdown(false); }} className="w-full text-left px-4 py-2.5 text-sm text-muted-foreground hover:bg-muted">Todos os alunos</button>
-              {students.map(s => (
-                <button key={s.id} onClick={() => { setSelectedStudentId(s.id); setShowStudentDropdown(false); }} className="w-full text-left px-4 py-2.5 text-sm text-foreground hover:bg-muted">{s.name}</button>
-              ))}
-            </div>
-          )}
+        <div className="relative group mb-8 lg:mb-12 data-stagger-index="1"" data-stagger-index="1">
+          <div className="rounded-[2px] bg-gradient-to-br from-card/95 via-card to-card/90 backdrop-blur-xl border border-border/50 shadow-2xl p-6 lg:p-8 hover-spring hover:shadow-3xl hover:-translate-y-2 transition-all duration-700 overflow-hidden hover:z-20">
+            <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-transparent to-accent/5 -skew-x-3 -translate-x-4 group-hover:translate-x-0 transition-transform duration-1000" />
+            <button onClick={() => setShowStudentDropdown(!showStudentDropdown)} className="relative flex items-center justify-between w-full text-left">
+              <div className="flex items-center gap-4 lg:gap-5">
+                <div className="w-14 h-14 lg:w-16 lg:h-16 rounded-[2px] bg-gradient-to-br from-primary via-accent to-primary flex items-center justify-center shadow-xl ring-2 ring-primary/30 group-hover:scale-110 group-hover:ring-accent/50 transition-all duration-500 hover-spring">
+                  <User size={20} className="text-primary-foreground drop-shadow-md" strokeWidth={2.5} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <span className="text-xl lg:text-2xl font-black tracking-[-0.04em] text-foreground leading-tight group-hover:text-accent transition-colors duration-500 drop-shadow-lg block">{selectedStudent?.name || 'Todos os alunos'}</span>
+                  <span className="text-xs lg:text-sm font-bold tracking-wider text-muted-foreground/90 uppercase mt-1 block">Selector</span>
+                </div>
+              </div>
+              <ChevronDown size={20} className="text-muted-foreground group-hover:text-accent transition-colors duration-300 shrink-0 ml-4" strokeWidth={2.5} />
+            </button>
+            {showStudentDropdown && (
+              <div className="absolute top-full left-0 right-0 mt-2 rounded-[2px] bg-card/98 backdrop-blur-2xl border border-border/60 shadow-2xl z-30 max-h-64 overflow-hidden lg:-left-4 lg:w-[105%] lg:-translate-x-2 lg:group-hover:translate-x-0 transition-all duration-500 hover-spring">
+                <div className="py-2 px-4 border-b border-border/50">
+                  <button onClick={() => { setSelectedStudentId(''); setShowStudentDropdown(false); }} className="w-full text-left px-3 py-3 text-base font-black tracking-tight text-muted-foreground hover:text-accent hover:bg-accent/10 hover-spring rounded-[1px] transition-all duration-300 block truncate">Todos os alunos</button>
+                </div>
+                <div className="max-h-48 overflow-y-auto">
+                  {students.map((s, i) => (
+                    <button key={s.id} data-stagger-index={i+2} onClick={() => { setSelectedStudentId(s.id); setShowStudentDropdown(false); }} className="w-full text-left px-3 py-3 text-lg font-black tracking-[-0.02em] text-foreground hover:text-accent hover:bg-gradient-to-r hover:from-accent/10 hover:to-primary/5 hover-spring rounded-[1px] border-l-4 border-transparent hover:border-accent transition-all duration-300 block truncate hover:-translate-x-1 hover:shadow-md">
+                      {s.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-1 mb-4">
-          {tabs.map(tab => (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-              className={`flex-1 flex items-center justify-center gap-1 py-2.5 rounded-xl text-xs font-bold transition-all ${activeTab === tab.id ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
-              <tab.icon size={14} />{tab.label}
-            </button>
-          ))}
+        {/* Tabs assimétricos */}
+        <div className="relative mb-8 lg:mb-12 data-stagger-index="2"" data-stagger-index="2">
+          <div className="flex flex-col lg:flex-row gap-2 lg:gap-3 items-start lg:items-end -ml-2 lg:-ml-4 [&>*]:hover:z-20">
+            {tabs.map((tab, i) => (
+              <button 
+                key={tab.id} 
+                data-stagger-index={i+3}
+                onClick={() => setActiveTab(tab.id)}
+                className={`group relative rounded-[2px] bg-card/95 backdrop-blur-sm border border-border/50 shadow-md hover:shadow-xl p-4 lg:p-5 hover-spring transition-all duration-500 font-black tracking-[-0.03em] text-sm lg:text-base uppercase leading-tight hover:-translate-y-1 hover:scale-[1.02] hover:border-accent/70 ${activeTab === tab.id ? 'bg-gradient-to-br from-primary via-accent to-primary shadow-2xl border-primary/80 text-primary-foreground ring-2 ring-primary/40 z-30 scale-[1.05] translate-y-[-4px]' : 'text-muted-foreground hover:text-accent hover:bg-accent/20'} ${i === 0 ? 'w-20 lg:w-24' : i === 1 ? 'w-28 lg:w-32 flex-1 lg:-translate-x-2 lg:mt-3' : i === 2 ? 'w-24 lg:w-28 lg:translate-x-4 lg:-mt-2' : 'w-22 lg:w-26 lg:translate-x-8'}`}
+              >
+                <div className="flex items-center justify-center lg:justify-start gap-2 lg:gap-3">
+                  <tab.icon size={18} strokeWidth={3} className={`group-hover:scale-110 transition-transform duration-300 ${activeTab === tab.id ? 'stroke-primary-foreground' : ''}`} />
+                  <span className="hidden lg:block whitespace-nowrap">{tab.label}</span>
+                </div>
+                {activeTab === tab.id && (
+                  <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-3/4 h-1 bg-gradient-to-r from-primary to-accent rounded-full shadow-lg" />
+                )}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Add button */}
         {selectedStudentId && activeTab !== 'charts' && (
-          <button onClick={() => { if (activeTab === 'photos') setShowPhotoModal(true); else if (activeTab === 'bioimpedance') setShowBioModal(true); else setShowMeasModal(true); }}
-            className="btn btn-primary w-full py-2.5 text-sm font-bold mb-4">
-            <Plus size={16} /> Adicionar
-          </button>
+          <div className="group relative mb-8 lg:mb-12 data-stagger-index="6"" data-stagger-index="6">
+            <button onClick={() => { if (activeTab === 'photos') setShowPhotoModal(true); else if (activeTab === 'bioimpedance') setShowBioModal(true); else setShowMeasModal(true); }}
+              className="rounded-[2px] bg-gradient-to-br from-primary via-accent to-primary border border-primary/50 shadow-2xl hover:shadow-3xl hover-spring hover:-translate-y-2 hover:scale-[1.02] p-6 lg:p-8 transition-all duration-700 font-black tracking-[-0.03em] text-lg lg:text-xl uppercase text-primary-foreground w-full relative overflow-hidden z-10 hover:z-20">
+              <div className="absolute inset-0 bg-gradient-to-r from-accent/20 to-primary/20 -skew-x-6 -translate-x-full group-hover:translate-x-0 transition-transform duration-1000" />
+              <div className="relative flex items-center justify-center gap-3">
+                <Plus size={24} strokeWidth={3} className="drop-shadow-lg" />
+                <span>Adicionar {activeTab === 'photos' ? 'Fotos' : activeTab === 'bioimpedance' ? 'Bioimpedância' : 'Medidas'}</span>
+              </div>
+            </button>
+          </div>
         )}
 
         {/* Photos tab */}
@@ -184,32 +216,52 @@ const Evolution: React.FC = () => {
 
         {/* Bioimpedance tab */}
         {activeTab === 'bioimpedance' && (
-          <div className="space-y-3">
+          <div className="space-y-5 lg:space-y-6 pt-2">
             {filteredBio.length === 0 ? (
-              <p className="text-center text-sm text-muted-foreground py-10">Nenhum registro de bioimpedância</p>
+              <div className="relative h-64 lg:h-72 flex flex-col items-center justify-center rounded-[2px] bg-gradient-to-br from-muted/60 to-card/90 backdrop-blur-xl border border-border/40 shadow-2xl data-stagger-index="15"" data-stagger-index="15">
+                <TrendingUp size={56} strokeWidth={1.5} className="mx-auto mb-6 text-muted-foreground/50 rotate-12" />
+                <p className="text-xl lg:text-2xl font-black tracking-[-0.05em] text-muted-foreground/80 text-center leading-tight drop-shadow-lg">Nenhum registro de bioimpedância</p>
+              </div>
             ) : filteredBio.slice().reverse().map((b, idx) => {
               const prevBio = idx < filteredBio.length - 1 ? filteredBio[filteredBio.length - 2 - idx] : undefined;
               return (
-                <div key={b.id} className="card-surface p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-bold text-muted-foreground">{format(b.date, "dd/MM/yyyy")}</span>
-                    <button onClick={() => deleteBioimpedance(b.id)} className="text-destructive"><X size={16} /></button>
+                <div key={b.id} data-stagger-index={idx+16} className="group relative rounded-[2px] bg-card/95 backdrop-blur-sm border border-border/50 shadow-xl hover:shadow-3xl p-6 lg:p-8 hover-spring transition-all duration-700 z-10 hover:z-30 overflow-hidden [&:nth-child(odd)]:translate-y-4 lg:[&:nth-child(odd)]:-translate-x-6 [&:nth-child(even)]:-translate-x-3">
+                  <div className="absolute top-4 right-4 z-40">
+                    <button onClick={() => deleteBioimpedance(b.id)} className="p-2.5 rounded-[2px] bg-destructive/15 hover:bg-destructive/25 text-destructive hover-spring shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.1] hover:rotate-[-5deg]">
+                      <X size={20} strokeWidth={2.5} />
+                    </button>
+                  </div>
+                  <div className="flex items-start gap-4 mb-6 lg:mb-8">
+                    <div className="w-14 h-14 lg:w-16 lg:h-16 rounded-[2px] bg-gradient-to-br from-warning/30 to-primary/40 flex items-center justify-center shadow-2xl ring-2 ring-warning/40 shrink-0 mt-1 -translate-y-1">
+                      <TrendingUp size={22} strokeWidth={3} className="text-warning drop-shadow-lg" />
+                    </div>
+                    <div className="flex-1 pt-1">
+                      <p className="text-xl lg:text-2xl font-black tracking-[-0.04em] text-foreground drop-shadow-2xl group-hover:text-accent transition-colors duration-500 leading-tight">{format(b.date, "dd/MM/yyyy")}</p>
+                    </div>
                   </div>
                   {b.image && (
-                    <div className="mb-3 rounded-lg overflow-hidden bg-muted aspect-video">
-                      <img src={b.image} alt="Bioimpedância" className="w-full h-full object-contain" />
+                    <div className="mb-6 lg:mb-10 rounded-[2px] overflow-hidden bg-muted/70 backdrop-blur-md shadow-2xl group/image hover-spring transition-all duration-700 cursor-pointer relative z-20 -mx-1 lg:-mx-2 h-32 lg:h-40">
+                      <img src={b.image} alt="Bioimpedância" className="w-full h-full object-contain group-hover/image:scale-105 group-hover/image:rotate-1 transition-transform duration-700 will-change-transform" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent opacity-0 group-hover/image:opacity-100 transition-opacity duration-500 flex items-end p-4">
+                        <span className="font-black text-primary-foreground text-base tracking-tight drop-shadow-2xl">Relatório Visual</span>
+                      </div>
                     </div>
                   )}
-                  <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-3 lg:gap-4 text-sm lg:text-base pt-2">
                     {[
-                      { label: 'Peso', value: `${b.data.weight}kg`, key: 'weight' as const, inverse: false },
-                      { label: 'Gordura', value: `${b.data.bodyFatPct}%`, key: 'bodyFatPct' as const, inverse: true },
-                      { label: 'Massa Muscular', value: `${b.data.muscleMass}kg`, key: 'muscleMass' as const, inverse: false },
-                      { label: 'Gordura Visceral', value: `${b.data.visceralFat}`, key: 'visceralFat' as const, inverse: true },
-                    ].map(item => (
-                      <div key={item.key} className="bg-muted rounded-lg px-3 py-2 flex items-center justify-between">
-                        <div><span className="text-muted-foreground text-xs">{item.label}:</span> <strong>{item.value}</strong></div>
-                        {prevBio && <DeltaIndicator current={b.data[item.key]} previous={prevBio.data[item.key]} inverse={item.inverse} />}
+                      { label: 'Peso', value: `${b.data.weight}kg`, key: 'weight', inverse: false, col: 'lg:col-span-1' },
+                      { label: 'Gordura %', value: `${b.data.bodyFatPct}%`, key: 'bodyFatPct', inverse: true, col: 'lg:col-span-1 xl:col-span-2' },
+                      { label: 'Massa Muscular', value: `${b.data.muscleMass}kg`, key: 'muscleMass', inverse: false, col: 'lg:col-span-1' },
+                      { label: 'Gord. Visceral', value: `${b.data.visceralFat}`, key: 'visceralFat', inverse: true, col: 'xl:col-span-1' },
+                    ].map((item, i) => (
+                      <div key={item.key} data-stagger-index={20+i} className={`group/metric relative rounded-[2px] bg-gradient-to-br from-card/80 via-muted to-card/70 backdrop-blur-sm border border-border/40 shadow-lg hover:shadow-2xl p-4 lg:p-5 hover-spring hover:-translate-y-1.5 hover:scale-[1.02] transition-all duration-500 z-10 hover:z-20 ${item.col} ${i%2 ? '-translate-x-2 lg:-translate-x-4' : 'translate-x-1 lg:translate-x-3 translate-y-1'}`}>
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1 min-w-0">
+                            <span className="text-xs lg:text-sm font-bold tracking-wider uppercase text-muted-foreground/90 block mb-1">{item.label}:</span>
+                            <strong className="text-2xl lg:text-3xl font-black tracking-[-0.05em] text-foreground block drop-shadow-xl group-hover/metric:text-accent transition-colors duration-400">{item.value}</strong>
+                          </div>
+                          {prevBio && <DeltaIndicator current={b.data[item.key as keyof Bioimpedance['data']]} previous={prevBio.data[item.key as keyof Bioimpedance['data']]} inverse={item.inverse} />}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -221,27 +273,41 @@ const Evolution: React.FC = () => {
 
         {/* Measurements tab */}
         {activeTab === 'measurements' && (
-          <div className="space-y-3">
+          <div className="space-y-5 lg:space-y-6 pt-2">
             {filteredMeas.length === 0 ? (
-              <p className="text-center text-sm text-muted-foreground py-10">Nenhuma medida registrada</p>
-            ) : filteredMeas.map(m => (
-              <div key={m.id} className="card-surface p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-bold text-muted-foreground">{format(m.date, "dd/MM/yyyy")}</span>
-                  <button onClick={() => deleteMeasurement(m.id)} className="text-destructive"><X size={16} /></button>
+              <div className="relative h-64 lg:h-72 flex flex-col items-center justify-center rounded-[2px] bg-gradient-to-br from-muted/60 to-card/90 backdrop-blur-xl border border-border/40 shadow-2xl data-stagger-index="25"" data-stagger-index="25">
+                <Pencil size={56} strokeWidth={1.5} className="mx-auto mb-6 text-muted-foreground/50 -rotate-6" />
+                <p className="text-xl lg:text-2xl font-black tracking-[-0.05em] text-muted-foreground/80 text-center leading-tight drop-shadow-lg">Nenhuma medida registrada</p>
+              </div>
+            ) : filteredMeas.map((m, idx) => (
+              <div key={m.id} data-stagger-index={idx+26} className="group relative rounded-[2px] bg-card/95 backdrop-blur-sm border border-border/50 shadow-xl hover:shadow-3xl p-6 lg:p-8 hover-spring transition-all duration-700 z-10 hover:z-30 overflow-hidden [&:nth-child(odd)]:-translate-x-5 lg:[&:nth-child(odd)]:translate-y-4 [&:nth-child(even)]:translate-x-4 lg:[&:nth-child(even)]:-translate-y-2">
+                <div className="absolute top-4 right-4 z-40">
+                  <button onClick={() => deleteMeasurement(m.id)} className="p-2.5 rounded-[2px] bg-destructive/15 hover:bg-destructive/25 text-destructive hover-spring shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.1] hover:rotate-5">
+                    <X size={20} strokeWidth={2.5} />
+                  </button>
                 </div>
-                <div className="grid grid-cols-3 gap-2 text-sm">
+                <div className="flex items-start gap-4 mb-6 lg:mb-8">
+                  <div className="w-14 h-14 lg:w-16 lg:h-16 rounded-[2px] bg-gradient-to-br from-success/40 to-primary/50 flex items-center justify-center shadow-2xl ring-2 ring-success/50 shrink-0 mt-2">
+                    <Pencil size={22} strokeWidth={3} className="text-success drop-shadow-lg" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-xl lg:text-2xl font-black tracking-[-0.04em] text-foreground drop-shadow-2xl group-hover:text-accent transition-colors duration-500 leading-tight">{format(m.date, "dd/MM/yyyy")}</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 lg:gap-4 text-base lg:text-lg pt-1">
                   {[
-                    { label: 'Peso', value: `${m.weight}kg` },
-                    { label: 'Peito', value: `${m.measurements.chest}cm` },
-                    { label: 'Cintura', value: `${m.measurements.waist}cm` },
-                    { label: 'Braço', value: `${m.measurements.arm}cm` },
-                    { label: 'Coxa', value: `${m.measurements.thigh}cm` },
-                    { label: 'Panturrilha', value: `${m.measurements.calf}cm` },
-                  ].map(item => (
-                    <div key={item.label} className="bg-muted rounded-lg px-2 py-1.5 text-center">
-                      <div className="text-[10px] text-muted-foreground">{item.label}</div>
-                      <div className="font-bold text-foreground">{item.value}</div>
+                    { label: 'Peso', value: `${m.weight}kg`, col: 'lg:col-span-1 xl:col-span-2', color: 'from-primary/20 to-accent/20' },
+                    { label: 'Peito', value: `${m.measurements.chest}cm`, col: 'col-span-1', color: 'from-warning/30 to-warning/10' },
+                    { label: 'Cintura', value: `${m.measurements.waist}cm`, col: 'col-span-1', color: 'from-destructive/20 to-destructive/5' },
+                    { label: 'Braço', value: `${m.measurements.arm}cm`, col: 'lg:col-span-1', color: 'from-success/30 to-success/10' },
+                    { label: 'Coxa', value: `${m.measurements.thigh}cm`, col: 'col-span-1 lg:col-span-2', color: 'from-accent/20 to-primary/10' },
+                    { label: 'Panturrilha', value: `${m.measurements.calf}cm`, col: 'col-span-1', color: 'from-muted/40 to-border/20' },
+                  ].map((item, i) => (
+                    <div key={item.label} data-stagger-index={30+i} className={`group/metric relative rounded-[2px] bg-gradient-to-br ${item.color} backdrop-blur-sm border border-border/30 shadow-lg hover:shadow-2xl p-4 lg:p-5 hover-spring hover:-translate-y-2 hover:scale-[1.03] transition-all duration-500 z-10 hover:z-20 ${item.col} ${i%2 ? 'translate-y-2 lg:translate-y-4 -translate-x-3' : '-translate-x-1 lg:-translate-x-2'}`}>
+                      <div className="flex flex-col items-center text-center h-full justify-center">
+                        <span className="text-xs lg:text-sm font-bold tracking-wider uppercase text-muted-foreground/90 block mb-2 px-1">{item.label}</span>
+                        <strong className="text-2xl lg:text-3xl font-black tracking-[-0.06em] text-foreground block drop-shadow-2xl group-hover/metric:text-accent transition-colors duration-500 leading-none">{item.value}</strong>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -311,37 +377,69 @@ const Evolution: React.FC = () => {
           </div>
         )}
 
-        {/* Photo modal */}
+        {/* Photo modal - Brutal redesign */}
         {showPhotoModal && (
-          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-foreground/40">
-            <div className="card-surface w-full max-w-md mx-4 p-6 rounded-t-2xl sm:rounded-2xl animate-fade-in-up">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-foreground">Adicionar fotos</h3>
-                <button onClick={() => setShowPhotoModal(false)} className="text-muted-foreground"><X size={20} /></button>
-              </div>
-              <div className="space-y-3">
-                <div>
-                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5 block">Data</label>
-                  <input type="date" value={photoDate} onChange={e => setPhotoDate(e.target.value)} className="input-field" />
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { ref: frontRef, file: frontFile, set: setFrontFile, label: 'Frente' },
-                    { ref: sideRef, file: sideFile, set: setSideFile, label: 'Lado' },
-                    { ref: backRef, file: backFile, set: setBackFile, label: 'Costas' },
-                  ].map(({ ref, file, set, label }) => (
-                    <div key={label}>
-                      <input ref={ref} type="file" accept="image/*" className="hidden" onChange={e => set(e.target.files?.[0] || null)} />
-                      <button onClick={() => ref.current?.click()}
-                        className={`w-full aspect-[3/4] rounded-lg border-2 border-dashed flex flex-col items-center justify-center gap-1 text-xs transition-all ${file ? 'border-primary bg-accent-light' : 'border-border text-muted-foreground'}`}>
-                        <Camera size={20} />{file ? '✓' : label}
-                      </button>
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-foreground/60 backdrop-blur-sm">
+            <div className="group relative w-full max-w-2xl mx-4 max-h-[90vh] overflow-hidden rounded-[2px] bg-gradient-to-br from-card/98 via-card to-card/95 backdrop-blur-3xl border border-border/70 shadow-2xl hover:shadow-4xl hover-spring hover:-translate-y-1 transition-all duration-700 data-stagger-index="45"" data-stagger-index="45">
+              <div className="absolute inset-0 bg-gradient-to-r from-primary/3 via-transparent to-accent/3 -skew-x-2 -translate-x-12 group-hover:translate-x-0 transition-transform duration-1200" />
+              <div className="p-8 lg:p-10 relative z-10">
+                <div className="flex items-start justify-between mb-8 lg:mb-12">
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 rounded-[2px] bg-gradient-to-br from-primary via-accent to-primary flex items-center justify-center shadow-2xl ring-3 ring-primary/40">
+                      <Camera size={24} strokeWidth={3} className="text-primary-foreground drop-shadow-lg" />
                     </div>
-                  ))}
+                    <div>
+                      <h3 className="text-2xl lg:text-3xl font-black tracking-[-0.05em] text-foreground drop-shadow-2xl leading-tight">Adicionar Fotos</h3>
+                      <p className="text-sm font-bold tracking-wider text-muted-foreground/90 uppercase mt-1">Progresso Visual</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setShowPhotoModal(false)} className="group/close p-3 rounded-[2px] bg-destructive/10 hover:bg-destructive/20 text-destructive hover-spring shadow-lg hover:shadow-xl transition-all duration-400 hover:scale-110 hover:rotate-90 shrink-0 ml-4">
+                    <X size={22} strokeWidth={2.5} />
+                  </button>
                 </div>
-                <button onClick={handleSavePhoto} disabled={saving} className="btn btn-primary w-full py-3 text-sm font-bold">
-                  {saving ? 'Enviando...' : 'Salvar fotos'}
-                </button>
+                <div className="space-y-6">
+                  <div>
+                    <label className="block text-xs font-black tracking-widest uppercase text-muted-foreground/80 mb-3">Data da Avaliação</label>
+                    <input type="date" value={photoDate} onChange={e => setPhotoDate(e.target.value)} className="w-full rounded-[2px] bg-card/80 backdrop-blur-sm border border-border/50 shadow-lg hover:shadow-xl hover:border-accent/60 focus:border-accent focus:shadow-2xl focus:outline-none p-4 lg:p-5 text-lg font-bold tracking-tight transition-all duration-500 hover-spring" />
+                  </div>
+                  <div className="grid grid-cols-3 gap-4 lg:gap-6">
+                    {[
+                      { ref: frontRef, file: frontFile, set: setFrontFile, label: 'Frente', pos: 'col-span-1 row-span-2 lg:-translate-x-2' },
+                      { ref: sideRef, file: sideFile, set: setSideFile, label: 'Lado', pos: 'col-span-2 row-span-1 lg:translate-y-3 z-10' },
+                      { ref: backRef, file: backFile, set: setBackFile, label: 'Costas', pos: 'col-span-1 row-span-1 lg:translate-y-6 -translate-x-1' }
+                    ].map(({ ref, file, set, label, pos }, i) => (
+                      <div key={label} className={`group/upload relative ${pos}`}>
+                        <input ref={ref} type="file" accept="image/*" className="hidden" onChange={e => set(e.target.files?.[0] || null)} />
+                        <button onClick={() => ref.current?.click()} className={`w-full h-32 lg:h-40 rounded-[2px] border-2 border-dashed overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-700 hover-spring group-hover/upload:scale-[1.02] relative ${file ? 'border-primary/70 bg-gradient-to-br from-primary/10 via-accent/5 to-primary/10 shadow-primary/20 ring-2 ring-primary/40' : 'border-border/40 bg-gradient-to-br from-muted/30 to-card/60 hover:border-accent/50 hover:bg-accent/10 text-muted-foreground/70'}`}>
+                          {file ? (
+                            <div className="absolute inset-0 bg-gradient-to-t from-primary/80 to-transparent flex flex-col items-center justify-center text-primary-foreground font-black text-lg tracking-tight drop-shadow-2xl">
+                              <span className="text-4xl mb-2">✓</span>
+                              <span>Pronto</span>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="absolute inset-0 flex items-center justify-center opacity-20">
+                                <Camera size={32} strokeWidth={1.5} />
+                              </div>
+                              <div className="relative flex flex-col items-center justify-center h-full text-center px-4">
+                                <span className="text-lg lg:text-xl font-black tracking-tight mb-2 block">{label}</span>
+                                <span className="text-xs uppercase tracking-wider text-muted-foreground/60">Clique para selecionar</span>
+                              </div>
+                            </>
+                          )}
+                          <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-accent/20 text-accent-foreground text-xs font-black px-3 py-1 rounded-full shadow-lg whitespace-nowrap">Upload</div>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <button onClick={handleSavePhoto} disabled={saving || !photoDate} className="group relative w-full rounded-[2px] bg-gradient-to-r from-primary via-accent to-primary border border-primary/50 shadow-3xl hover:shadow-4xl hover-spring hover:-translate-y-2 p-6 lg:p-8 transition-all duration-700 font-black tracking-[-0.04em] text-xl lg:text-2xl uppercase text-primary-foreground overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed disabled:hover-spring:none z-20">
+                    <div className="absolute inset-0 bg-gradient-to-r from-accent/30 to-primary/30 -skew-x-12 -translate-x-full group-hover:translate-x-0 transition-transform duration-1000" />
+                    <div className="relative flex items-center justify-center gap-4">
+                      {saving ? <span className="w-6 h-6 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" /> : <Plus size={28} strokeWidth={3} className="drop-shadow-2xl" />}
+                      <span>{saving ? 'Enviando...' : 'Salvar Fotos'}</span>
+                    </div>
+                  </button>
+                </div>
               </div>
             </div>
           </div>

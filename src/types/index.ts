@@ -2,6 +2,8 @@ export interface Student {
   id: string;
   name: string;
   phone: string;
+  document?: string;
+  parentId?: string;
   plan: 'monthly' | 'session';
   value: number;
   weeklyFrequency: number;
@@ -147,6 +149,8 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  role?: 'admin_master' | 'cliente_pessoal' | 'sub_cliente';
+  parentProfileId?: string;
   plan: UserPlan;
   isAdmin: boolean;
   notifications: {
