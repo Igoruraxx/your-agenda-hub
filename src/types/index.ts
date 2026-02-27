@@ -10,10 +10,10 @@ export interface Student {
   isConsulting: boolean;
   isActive: boolean;
   billingDay?: number | null;
-  shareToken?: string | null; // token único para link público de evolução
-  planDuration?: number | null; // em meses
+  shareToken?: string | null;
+  planDuration?: number | null;
   totalValue?: number | null;
-  nextBillingDate?: string | null; // yyyy-mm-dd
+  nextBillingDate?: string | null;
 }
 
 export type MuscleGroup =
@@ -81,42 +81,8 @@ export interface Measurement {
   };
 }
 
-export type UserPlan = 'free' | 'premium';
-
-export type SubscriptionStatus = 'active' | 'expired' | 'cancelled';
-export type PlanOrigin = 'paid' | 'courtesy' | 'trial';
-
-export interface PlanHistoryEntry {
-  id: string;
-  plan: UserPlan;
-  origin: PlanOrigin;
-  startDate: string;
-  endDate: string;
-  durationDays: number;
-  addedBy: string;
-  note?: string;
-}
-
-export interface Subscription {
-  plan: UserPlan;
-  status: SubscriptionStatus;
-  startDate: string;
-  endDate: string;
-  origin: PlanOrigin;
-  history: PlanHistoryEntry[];
-}
-
-export interface AdminUser {
-  id: string;
-  name: string;
-  email: string;
-  phone?: string;
-  plan: UserPlan;
-  status: 'active' | 'inactive';
-  students: number;
-  joinDate: string;
-  subscription: Subscription;
-}
+// Subscription is now managed via Stripe
+export type SubscriptionStatus = 'free' | 'active' | 'canceled' | 'past_due';
 
 export interface PlanLimits {
   maxStudents: number;
@@ -127,7 +93,7 @@ export interface PlanLimits {
   hasPrioritySupport: boolean;
 }
 
-export const PLAN_LIMITS: Record<UserPlan, PlanLimits> = {
+export const PLAN_LIMITS: Record<SubscriptionStatus, PlanLimits> = {
   free: {
     maxStudents: 5,
     hasFinanceModule: false,
@@ -136,7 +102,7 @@ export const PLAN_LIMITS: Record<UserPlan, PlanLimits> = {
     hasExport: false,
     hasPrioritySupport: false,
   },
-  premium: {
+  active: {
     maxStudents: Infinity,
     hasFinanceModule: true,
     hasEvolutionModule: true,
@@ -144,19 +110,49 @@ export const PLAN_LIMITS: Record<UserPlan, PlanLimits> = {
     hasExport: true,
     hasPrioritySupport: true,
   },
+  canceled: {
+    maxStudents: 5,
+    hasFinanceModule: false,
+    hasEvolutionModule: false,
+    hasAdvancedSchedule: false,
+    hasExport: false,
+    hasPrioritySupport: false,
+  },
+  past_due: {
+    maxStudents: 5,
+    hasFinanceModule: false,
+    hasEvolutionModule: false,
+    hasAdvancedSchedule: false,
+    hasExport: false,
+    hasPrioritySupport: false,
+  },
 };
 
 export interface User {
   id: string;
   name: string;
   email: string;
-  plan: UserPlan;
+  phone?: string;
+  avatarUrl?: string;
+  subscriptionStatus: SubscriptionStatus;
+  subscriptionProductId?: string;
+  subscriptionEndDate?: string;
   isAdmin: boolean;
-  notifications: {
-    enabled: boolean;
-    notifyBefore: boolean;
-    notifyAtTime: boolean;
-    dailyListTime: string;
-  };
-  subscription: Subscription;
 }
+
+// For admin panel
+export interface AdminUser {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  subscriptionStatus: SubscriptionStatus;
+  subscriptionProductId?: string;
+  subscriptionEndDate?: string;
+  studentCount: number;
+  createdAt: string;
+  roles: string[];
+}
+
+// Legacy compat — keep UserPlan alias
+export type UserPlan = 'free' | 'premium';
