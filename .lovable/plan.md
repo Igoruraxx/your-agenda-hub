@@ -1,122 +1,98 @@
 
+# Plano de Melhorias - Agenda, Financeiro, Admin e Trial
 
-# Plano de Melhorias Completas - FitPro Agenda Personal
+## 1. Agenda - Grid com horarios 05h-22h
 
-## 1. Agenda - Visualizacoes e Drag and Drop
+**Problema atual:** TIME_SLOTS gera apenas 06h-20h (15 slots). Views semanal e diaria nao mostram grid visual com todos os horarios.
 
-### 1.1 Tres modos de visualizacao
-- **Por dia**: Visualizacao atual com lista de horarios do dia selecionado
-- **Por semana**: Grade visual com colunas (Seg-Dom) e linhas de horario (06h-20h), mostrando cards nos slots
-- **Lista semanal vertical**: Lista corrida de todos os agendamentos da semana, agrupados por dia, com scroll vertical
+**Solucao:**
+- Expandir TIME_SLOTS para 05:00 ate 22:00 (18 slots)
+- Na view diaria, mostrar grid vertical com cada horario como linha, appointments encaixados no slot correto, slots vazios clicaveis para criar agendamento rapido
+- Na view semanal, mesma logica com grid 7 colunas x 18 linhas
+- Ao selecionar frequencia do aluno no cadastro (Students.tsx), apos salvar, abrir modal perguntando se deseja criar agendamentos automaticos para as proximas 4 semanas baseado nos dias/horarios selecionados. Se sim, chamar addAppointment em batch para cada ocorrencia
 
-Adicionar toggle com 3 botoes no topo da pagina Schedule (Dia / Semana / Lista).
+## 2. Painel Financeiro - Refatoracao completa
 
-### 1.2 Drag and Drop nos horarios
-- Usar a biblioteca `@dnd-kit/core` + `@dnd-kit/sortable` para arrastar agendamentos entre horarios
-- Na vista semanal, arrastar cards entre slots de horario/dia
-- Ao soltar, chamar `updateAppointment` com nova data/hora
-- Feedback visual com ghost element e indicador de drop zone
+**Problema atual:** Finance.tsx usa appointments simulados (buildMonthAppointments) e nao tem sistema de pagamentos real. Nao da para dar baixa, nao marca atraso, nao tem cobranca integrada.
 
-## 2. Clientes - Campos e Funcionalidades
+**Solucao - Usar tabela `payments` ja existente no schema:**
 
-### 2.1 Melhorias no cadastro
-- Nome e telefone ja existem
-- Data de vencimento (billingDay) ja existe
-- Valor total ja existe
-- Frequencia semanal ja existe (weeklyFrequency 1-6)
-- Limitar selecao de dias ao numero da frequencia selecionada (se freq=3, so pode marcar 3 dias)
-- Aluno de consultoria nao aparece na agenda (ja implementado com `isConsulting`)
+### 2.1 Hook usePayments
+- Criar `src/hooks/usePayments.ts` que faz CRUD na tabela `payments`
+- Funcoes: fetchPayments, createPayment, markAsPaid, markAsOverdue
+- Ao abrir Finance, gerar automaticamente payments pendentes do mes se ainda nao existirem
 
-### 2.2 Botao WhatsApp na listagem
-- Ja existe parcialmente. Melhorar com icone WhatsApp verde visivel e link `https://wa.me/` com numero limpo
+### 2.2 Nova interface do Finance
+- **Cards resumo:** Receita prevista, Recebido, Pendente, Atrasado
+- **Lista por aluno** com status visual (pago/pendente/atrasado):
+  - Botao "Dar baixa" (marca paid_at = now, status = paid)
+  - Botao "Cobrar via WhatsApp" com mensagem formatada incluindo dias de atraso
+  - Badge com dias de atraso (diferenca entre due_date e hoje)
+  - Para plano sessao: barra de progresso mostrando sessoes feitas vs totais, valor pendente flutuante
+- **Filtros:** Todos / Pendentes / Pagos / Atrasados
 
-## 3. Evolucao - Melhorias
+### 2.3 Logica de sessoes
+- Alunos com plano session: calcular sessoes totais do mes vs session_done
+- Mostrar "X de Y sessoes concluidas" com barra
+- Valor pendente = sessoes restantes * valor por sessao
+- Pagamento so vence quando todas sessoes do ciclo sao concluidas
 
-### 3.1 Fotos de evolucao
-- Ja implementado (frente, lado, costas). Manter como esta.
+## 3. Painel Administrativo - Premium com dias, trial e origem
 
-### 3.2 Bioimpedancia com foto
-- Adicionar campo de upload de foto/arquivo no modal de bioimpedancia (ja existe `imageFile` no hook, falta o input no modal)
-- Ao preencher dados, comparar automaticamente com o ultimo registro do aluno e mostrar deltas (setas cima/baixo com cores verde/vermelho)
+**Mudancas no DB (migracao):**
+- Adicionar colunas na tabela `profiles`:
+  - `premium_expires_at` (timestamptz, nullable) - quando o premium expira
+  - `premium_origin` (text, default 'trial') - valores: 'trial', 'courtesy', 'paid'
+  - `trial_started_at` (timestamptz, nullable) - quando o trial comecou
 
-### 3.3 Dobras cutaneas e medidas corporais
-- Ja implementado no modal de medidas. Manter padrao atual.
+### 3.1 Trial automatico de 7 dias
+- No registro (trigger SQL ou no register do AuthContext): setar `plan = 'premium'`, `premium_origin = 'trial'`, `trial_started_at = now()`, `premium_expires_at = now() + 7 days`
+- No AuthContext, ao carregar profile, verificar se premium_expires_at ja passou. Se sim, fazer downgrade automatico para free
 
-### 3.4 Evolucao grafica com Recharts
-- Adicionar aba "Graficos" na pagina Evolution
-- Graficos de linha para: peso, % gordura, massa muscular, dobras cutaneas ao longo do tempo
-- Usar Recharts (ja instalado)
+### 3.2 Admin - Dar dias de premium
+- Modal "Adicionar Premium" com campo de dias (ex: 30, 60, 90) e selecao de origem (cortesia/pago)
+- Ao confirmar, atualizar premium_expires_at = now() + X dias, plan = premium, premium_origin
+- Botao remover premium (setar plan = free, limpar expires)
 
-### 3.5 Evolucao escrita
-- Ao lado dos graficos, mostrar resumo textual: "Desde a primeira avaliacao: perdeu X kg de gordura, ganhou Y kg de massa muscular"
-- Comparacao com a ultima sessao
+### 3.3 Admin - Indicadores
+- Mostrar para cada personal: plano atual, origem (Trial/Cortesia/Pago), dias restantes de premium, data de expiracao
+- Botao de remover personal (soft delete ou delete cascade)
+- Badge colorido por origem: azul=trial, amarelo=cortesia, verde=pago
 
-### 3.6 Vincular evolucao ao aluno
-- Ja implementado com seletor de aluno. Manter.
+## 4. Cadastro de alunos - Auto-criar agenda
 
-## 4. Financas - Melhorias
-
-### 4.1 Aluno inativo nao entra na contagem
-- Ja implementado (filtra `isActive`). Manter.
-
-### 4.2 Plano por sessao com pagamento flutuante
-- Calcular sessoes totais do plano vs sessoes realizadas (session_done)
-- Mostrar sessoes restantes e valor pendente
-- Pagamento vence quando todas as sessoes sao concluidas
-- Indicador visual de progresso (barra) por aluno
-
-### 4.3 Botao de cobranca WhatsApp
-- Adicionar botao WhatsApp ao lado de cada aluno no financeiro
-- Mensagem pre-formatada: "Ola [nome], seu pagamento de R$ [valor] referente a [mes] esta pendente."
-
-## 5. Perfil do Personal - Melhorias
-
-### 5.1 Informacoes do plano
-- Mostrar qual plano atual (Free/Premium) - ja existe
-- Numero total de agendamentos do dia - ja existe
-- Numero total de alunos - ja existe
-
-### 5.2 Lista de atendidos no dia
-- Adicionar secao "Atendidos hoje" mostrando alunos com `session_done = true` no dia atual
-- Separar visualmente dos agendamentos pendentes
-
-## 6. Painel Administrativo
-
-### 6.1 Nova pagina Admin
-- Acessivel apenas por usuarios com `is_admin = true`
-- Listar todos os personais cadastrados (todos os profiles)
-- Mostrar: nome, email, plano, qtd de alunos, data de cadastro
-- Acoes: alterar plano (free/premium), ativar/desativar usuario
-
-### 6.2 Aba Admin no BottomNavigation
-- Ja existe condicionalmente (`isAdmin`). Conectar a nova pagina.
+**No Students.tsx:**
+- Apos salvar aluno com dias/horarios selecionados, mostrar toast/modal: "Deseja criar agendamentos para as proximas 4 semanas?"
+- Se sim, calcular as datas (proximas 4 ocorrencias de cada dia selecionado) e chamar addAppointment para cada
 
 ---
 
 ## Detalhes Tecnicos
 
-### Novas dependencias
-- `@dnd-kit/core` e `@dnd-kit/sortable` para drag and drop
+### Migracao SQL necessaria
+```text
+ALTER TABLE profiles ADD COLUMN premium_expires_at timestamptz;
+ALTER TABLE profiles ADD COLUMN premium_origin text DEFAULT 'trial';
+ALTER TABLE profiles ADD COLUMN trial_started_at timestamptz;
+```
 
 ### Arquivos a criar
-- `src/pages/Admin.tsx` - Painel administrativo
+- `src/hooks/usePayments.ts` - CRUD da tabela payments
 
 ### Arquivos a modificar
-- `src/pages/Schedule.tsx` - 3 modos de visualizacao + drag and drop + botao WhatsApp
-- `src/pages/Students.tsx` - Limitar dias pela frequencia + melhorar WhatsApp
-- `src/pages/Evolution.tsx` - Upload foto bioimpedancia + comparacao automatica + graficos Recharts + evolucao escrita + aba graficos
-- `src/pages/Finance.tsx` - Sessoes restantes + pagamento flutuante + botao cobranca WhatsApp
-- `src/pages/UserPanel.tsx` - Lista de atendidos no dia
-- `src/components/BottomNavigation.tsx` - Conectar aba Admin
-- `src/App.tsx` - Lazy load Admin page
-- `src/hooks/useAppointments.ts` - Suportar phone nos appointments para WhatsApp
+- `src/pages/Schedule.tsx` - TIME_SLOTS 05-22, grid visual diario/semanal
+- `src/pages/Finance.tsx` - Refatoracao completa com payments reais, dar baixa, cobranca, atraso
+- `src/pages/Admin.tsx` - Dias premium, origem, remover, trial info
+- `src/pages/Students.tsx` - Auto-criar agenda apos salvar
+- `src/contexts/AuthContext.tsx` - Verificar expiracao do trial, setar trial no registro
+- `src/types/index.ts` - Ajustar tipos se necessario
+- `src/types/database.ts` - Adicionar novas colunas de profiles
 
 ### Ordem de implementacao
-1. Instalar @dnd-kit
-2. Schedule (3 views + drag and drop + WhatsApp)
-3. Students (limitar dias + WhatsApp)
-4. Evolution (foto bio + comparacao + graficos + texto)
-5. Finance (sessoes flutuantes + WhatsApp cobranca)
-6. UserPanel (atendidos do dia)
-7. Admin page
-
+1. Migracao DB (novas colunas em profiles)
+2. usePayments hook
+3. Schedule (grid 05-22h)
+4. Finance (refatoracao completa)
+5. Admin (premium com dias, trial, origem)
+6. Students (auto-criar agenda)
+7. AuthContext (trial/expiracao)
