@@ -60,12 +60,12 @@ function App() {
       <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ backgroundColor: 'var(--n-100)' }}>
         <div
           className="w-14 h-14 rounded-2xl flex items-center justify-center"
-          style={{ background: 'linear-gradient(135deg, var(--accent), #6366f1)' }}
+          style={{ background: 'linear-gradient(135deg, var(--accent), var(--accent-dark))' }}
         >
           <CalendarDays size={28} className="text-white" strokeWidth={2.5} />
         </div>
         <div className="text-center leading-none">
-          <span className="text-2xl font-extrabold tracking-tight" style={{ fontStyle: 'italic', background: 'linear-gradient(135deg, var(--accent), #6366f1)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', fontWeight: 900 }}>
+          <span className="text-2xl font-extrabold tracking-tight" style={{ fontStyle: 'italic', background: 'linear-gradient(135deg, var(--accent), var(--accent-dark))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', fontWeight: 900 }}>
             FITPRO
           </span>
           <span className="block text-xs font-bold tracking-wider mt-0.5" style={{ color: 'var(--n-500)' }}>
@@ -98,12 +98,12 @@ function App() {
         <div className="flex items-center gap-2.5">
           <div
             className="w-9 h-9 rounded-xl flex items-center justify-center"
-            style={{ background: 'linear-gradient(135deg, var(--accent), #6366f1)' }}
+            style={{ background: 'linear-gradient(135deg, var(--accent), var(--accent-dark))' }}
           >
             <CalendarDays size={18} className="text-white" strokeWidth={2.5} />
           </div>
           <div className="leading-none">
-            <span className="text-lg font-extrabold tracking-tight" style={{ fontStyle: 'italic', background: 'linear-gradient(135deg, var(--accent), #6366f1)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', fontWeight: 900, letterSpacing: '-0.02em', paddingRight: '2px' }}>
+            <span className="text-lg font-extrabold tracking-tight" style={{ fontStyle: 'italic', background: 'linear-gradient(135deg, var(--accent), var(--accent-dark))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', fontWeight: 900, letterSpacing: '-0.02em', paddingRight: '2px' }}>
               FITPRO
             </span>
             <span className="block text-[10px] font-bold tracking-wider" style={{ color: 'var(--n-500)', marginTop: '-1px' }}>
