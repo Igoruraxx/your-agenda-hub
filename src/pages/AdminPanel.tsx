@@ -47,10 +47,10 @@ const AdminPanel: React.FC = () => {
             return acc;
           }, {});
         }
-      } catch {}
+      } catch { /* non-critical, fallback to empty counts */ }
 
       // Fetch all roles
-      let userRoles: Record<string, string[]> = {};
+      const userRoles: Record<string, string[]> = {};
       try {
         const { data: rData } = await supabase.from('user_roles').select('user_id, role');
         if (rData) {
@@ -59,7 +59,7 @@ const AdminPanel: React.FC = () => {
             userRoles[r.user_id].push(r.role);
           });
         }
-      } catch {}
+      } catch { /* non-critical, fallback to empty roles */ }
 
       const mapped: AdminUser[] = (profiles || []).map((p: any) => ({
         id: p.id,

@@ -21,6 +21,11 @@ export default tseslint.config(
       ...reactHooks.configs.recommended.rules,
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
       "@typescript-eslint/no-unused-vars": "off",
+      // Widespread in existing codebase and shadcn-ui generated code
+      "@typescript-eslint/no-explicit-any": "off",
+      "@typescript-eslint/no-empty-object-type": "off",
+      // tailwind.config.ts uses require() — CommonJS interop
+      "@typescript-eslint/no-require-imports": "off",
     },
   },
 );
