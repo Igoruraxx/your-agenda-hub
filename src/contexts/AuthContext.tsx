@@ -94,7 +94,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .select('*')
         .eq('id', userId)
         .single();
-      if (!error && data) {
+      if (error) {
+        console.error("[Auth] fetchProfile error:", error.message, error.code);
+        return null;
+      }
+      if (data) {
+        console.log("[Auth] Profile loaded:", data.id, data.name);
         return data as Profile;
       }
     } catch (e) {
@@ -105,6 +110,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Efeito 1: onAuthStateChange — ÚNICA fonte de verdade da sessão
   useEffect(() => {
+    mountedRef.current = true; // Reset on re-mount (StrictMode fix)
     let resolved = false;
 
     const logSession = (label: string, session: Session | null) => {
