@@ -63,23 +63,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const planLimits = PLAN_LIMITS[currentUser.subscriptionStatus] || PLAN_LIMITS.free;
 
   // Fetch profile + role from DB
-  const fetchUserData = useCallback(async (userId: string): Promise<User | null> => {
+  const fetchUserData = useCallback(async (userId: string, userMeta?: { name?: string; email?: string }): Promise<User | null> => {
     try {
-      // Parallel fetch: profile + roles
       const [profileRes, rolesRes] = await Promise.all([
-        supabase.from('profiles').select('*').eq('id', userId).single(),
+        supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
         supabase.from('user_roles').select('role').eq('user_id', userId),
       ]);
 
-      if (profileRes.error) {
+      let profile = profileRes.data as Profile | null;
+
+      if (!profile && !profileRes.error) {
+        // Profile doesn't exist — auto-create via upsert
+        const newProfile = {
+          id: userId,
+          name: userMeta?.name || userMeta?.email?.split('@')[0] || '',
+          email: userMeta?.email || '',
+        };
+        const { data, error } = await supabase.from('profiles').upsert(newProfile).select().single();
+        if (error) { console.error('[Auth] Auto-create profile error:', error.message); return null; }
+        profile = data as Profile;
+        await supabase.from('user_roles').upsert({ user_id: userId, role: 'user' });
+      } else if (profileRes.error) {
         console.error('[Auth] fetchProfile error:', profileRes.error.message);
         return null;
       }
 
-      const profile = profileRes.data as Profile;
+      if (!profile) return null;
       const roles = (rolesRes.data || []) as UserRole[];
       const hasAdmin = roles.some(r => r.role === 'admin');
-
       console.log('[Auth] Profile loaded:', profile.id, profile.name, 'admin:', hasAdmin);
       return profileToUser(profile, hasAdmin);
     } catch (e) {
@@ -121,7 +132,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const { data } = await supabase.auth.getSession();
         const s = data.session;
         if (s?.user) {
-          const user = await fetchUserData(s.user.id);
+          const user = await fetchUserData(s.user.id, { name: s.user.user_metadata?.name || s.user.user_metadata?.full_name, email: s.user.email });
           if (mountedRef.current && user) setCurrentUser(user);
           setSession(s);
         }
@@ -141,14 +152,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSession(s ?? null);
 
         if (s?.user) {
-          const user = await fetchUserData(s.user.id);
+          const user = await fetchUserData(s.user.id, { name: s.user.user_metadata?.name || s.user.user_metadata?.full_name, email: s.user.email });
           if (mountedRef.current) {
             if (user) {
               setCurrentUser(user);
             } else {
               // Retry after 1s (trigger delay on signup)
               setTimeout(async () => {
-                const retry = await fetchUserData(s.user.id);
+                const retry = await fetchUserData(s.user.id, { name: s.user.user_metadata?.name || s.user.user_metadata?.full_name, email: s.user.email });
                 if (mountedRef.current && retry) setCurrentUser(retry);
               }, 1000);
             }

@@ -12,7 +12,8 @@ export const supabase = createClient(
       persistSession: true,
       detectSessionInUrl: true,
       storageKey: 'fitpro-auth-token',
-      storage: window.localStorage
+      storage: window.localStorage,
+      lock: async <R>(_name: string, _acquireTimeout: number, fn: () => Promise<R>) => fn(),
     },
   }
 );
