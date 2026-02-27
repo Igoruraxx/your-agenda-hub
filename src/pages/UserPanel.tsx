@@ -28,7 +28,7 @@ const UserPanel: React.FC = () => {
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-8 lg:py-12 min-h-[100dvh] scroll-mt-20 snap-start" data-stagger-index="0">
       {/* Profile header */}
-      <div className="relative group mb-8 lg:mb-12 data-stagger-index="1"" data-stagger-index="1">
+      <div className="relative group mb-8 lg:mb-12" data-stagger-index="1">
         <div className="rounded-[2px] bg-gradient-to-br from-card/95 via-card to-card/90 backdrop-blur-xl border border-border/50 shadow-2xl p-6 lg:p-8 hover-spring hover:shadow-3xl hover:-translate-y-2 transition-all duration-700 overflow-hidden hover:z-20">
           <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-transparent to-accent/5 -skew-x-3 -translate-x-4 group-hover:translate-x-0 transition-transform duration-1000" />
           <div className="relative flex items-center gap-5 lg:gap-6">
@@ -55,7 +55,7 @@ const UserPanel: React.FC = () => {
       </div>
 
       {/* Quick stats */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6 mb-8 lg:mb-12 data-stagger-index="2"" data-stagger-index="2">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6 mb-8 lg:mb-12" data-stagger-index="2">
         <div className="group relative rounded-[2px] bg-card/95 backdrop-blur-sm border border-border/50 shadow-xl p-6 lg:p-8 text-center hover-spring hover:shadow-2xl hover:-translate-y-2 hover:scale-[1.02] transition-all duration-500 z-10 lg:hover:z-20 lg:[&:nth-child(2)]:mt-4 lg:[&:nth-child(2)]:[-translate-x-4] lg:[&:nth-child(3)]:[translate-x-8] lg:[&:nth-child(3)]:shadow-[20px_0_40px_-10px_rgba(0,0,0,0.1)]">
           <Calendar size={28} className="text-primary mx-auto mb-3 lg:mb-4 drop-shadow-lg group-hover:scale-110 group-hover:rotate-6 transition-all duration-400 stroke-primary/80" strokeWidth={2.5} />
           <p className="text-3xl lg:text-4xl font-black tracking-[-0.05em] text-foreground drop-shadow-md mb-2 leading-none">{todayApts.length}</p>
@@ -77,7 +77,7 @@ const UserPanel: React.FC = () => {
       <div className="space-y-6 lg:space-y-8 mb-12" data-stagger-index="3">
         {/* Attended today */}
         {attendedToday.length > 0 && (
-          <div className="group relative rounded-[2px] bg-gradient-to-r from-success/5 to-success/2 backdrop-blur-sm border border-success/30 shadow-xl p-6 lg:p-8 hover-spring hover:shadow-2xl hover:-translate-y-1.5 transition-all duration-500 data-stagger-index="4"" data-stagger-index="4">
+          <div className="group relative rounded-[2px] bg-gradient-to-r from-success/5 to-success/2 backdrop-blur-sm border border-success/30 shadow-xl p-6 lg:p-8 hover-spring hover:shadow-2xl hover:-translate-y-1.5 transition-all duration-500" data-stagger-index="4">
             <h3 className="text-sm lg:text-base font-black tracking-wider text-success uppercase mb-4 flex items-center gap-2 drop-shadow-md">
               <CheckCircle2 size={20} strokeWidth={3} className="drop-shadow-lg" /> ATENDIDOS HOJE ({attendedToday.length})
             </h3>
@@ -101,7 +101,7 @@ const UserPanel: React.FC = () => {
 
         {/* Pending today */}
         {pendingToday.length > 0 && (
-          <div className="group relative rounded-[2px] bg-gradient-to-r from-muted/10 to-muted/5 backdrop-blur-sm border border-border/50 shadow-xl p-6 lg:p-8 hover-spring hover:shadow-2xl hover:-translate-y-1.5 [-20px] transition-all duration-500 data-stagger-index="5"" data-stagger-index="5">
+          <div className="group relative rounded-[2px] bg-gradient-to-r from-muted/10 to-muted/5 backdrop-blur-sm border border-border/50 shadow-xl p-6 lg:p-8 hover-spring hover:shadow-2xl hover:-translate-y-1.5 [-20px] transition-all duration-500" data-stagger-index="5">
             <h3 className="text-sm lg:text-base font-black tracking-wider text-muted-foreground uppercase mb-4 flex items-center gap-2 drop-shadow-md">
               PENDENTES HOJE ({pendingToday.length})
             </h3>
@@ -118,7 +118,7 @@ const UserPanel: React.FC = () => {
 
         {/* Tomorrow */}
         {tomorrowApts.length > 0 && (
-          <div className="group relative rounded-[2px] bg-gradient-to-r from-accent/5 to-primary/5 backdrop-blur-sm border border-accent/30 shadow-xl p-6 lg:p-8 hover-spring hover:shadow-2xl hover:-translate-y-1.5 transition-all duration-500 data-stagger-index="6"" data-stagger-index="6">
+          <div className="group relative rounded-[2px] bg-gradient-to-r from-accent/5 to-primary/5 backdrop-blur-sm border border-accent/30 shadow-xl p-6 lg:p-8 hover-spring hover:shadow-2xl hover:-translate-y-1.5 transition-all duration-500" data-stagger-index="6">
             <h3 className="text-sm lg:text-base font-black tracking-wider text-accent uppercase mb-4 flex items-center gap-2 drop-shadow-md">
               AMANHÃ ({tomorrowApts.length})
             </h3>
@@ -135,9 +135,9 @@ const UserPanel: React.FC = () => {
       </div>
 
       {/* Action section */}
-      <div className="space-y-4 lg:space-y-5 data-stagger-index="7">
+      <div className="space-y-4 lg:space-y-5" data-stagger-index="7">
         {/* Notifications */}
-        <div className="group relative rounded-[2px] bg-card/95 backdrop-blur-sm border border-border/50 shadow-lg p-6 lg:p-8 hover-spring hover:shadow-xl hover:-translate-y-1 transition-all duration-400 cursor-pointer data-stagger-index="8"" data-stagger-index="8">
+        <div className="group relative rounded-[2px] bg-card/95 backdrop-blur-sm border border-border/50 shadow-lg p-6 lg:p-8 hover-spring hover:shadow-xl hover:-translate-y-1 transition-all duration-400 cursor-pointer" data-stagger-index="8">
           <button onClick={() => setShowNotifSettings(!showNotifSettings)} className="w-full flex items-center justify-between">
             <div className="flex items-center gap-4">
               {currentUser.notifications.enabled ? 
@@ -174,7 +174,7 @@ const UserPanel: React.FC = () => {
 
         {/* Plan upgrade / downgrade */}
         {!isPremium ? (
-          <div className="group relative rounded-[2px] bg-gradient-to-r from-warning/10 to-warning/5 backdrop-blur-sm border border-warning/40 shadow-xl p-6 lg:p-8 hover-spring hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 cursor-pointer data-stagger-index="9"" data-stagger-index="9">
+          <div className="group relative rounded-[2px] bg-gradient-to-r from-warning/10 to-warning/5 backdrop-blur-sm border border-warning/40 shadow-xl p-6 lg:p-8 hover-spring hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 cursor-pointer" data-stagger-index="9">
             <button onClick={upgradeToPremium} className="w-full flex items-center gap-4">
               <div className="w-14 h-14 rounded-[2px] bg-warning/30 flex items-center justify-center shadow-lg ring-2 ring-warning/50 group-hover:scale-110 group-hover:rotate-3 hover-spring transition-all duration-400">
                 <Crown size={24} className="text-warning drop-shadow-lg" strokeWidth={2.5} />
@@ -186,7 +186,7 @@ const UserPanel: React.FC = () => {
             </button>
           </div>
         ) : (
-          <div className="group relative rounded-[2px] bg-card/95 backdrop-blur-sm border border-border/50 shadow-lg p-6 lg:p-8 hover-spring hover:shadow-xl hover:-translate-y-1 transition-all duration-400 cursor-pointer data-stagger-index="9"" data-stagger-index="9">
+          <div className="group relative rounded-[2px] bg-card/95 backdrop-blur-sm border border-border/50 shadow-lg p-6 lg:p-8 hover-spring hover:shadow-xl hover:-translate-y-1 transition-all duration-400 cursor-pointer" data-stagger-index="9">
             <button onClick={downgradeToFree} className="w-full flex items-center gap-4 text-muted-foreground">
               <div className="w-14 h-14 rounded-[2px] bg-muted/50 flex items-center justify-center shadow-sm ring-1 ring-border/50 group-hover:scale-110 hover-spring transition-all duration-300">
                 <Shield size={24} className="text-muted-foreground" strokeWidth={2.5} />
@@ -197,7 +197,7 @@ const UserPanel: React.FC = () => {
         )}
 
         {/* Logout */}
-        <div className="group relative rounded-[2px] bg-destructive/5 backdrop-blur-sm border border-destructive/30 shadow-xl p-6 lg:p-8 hover-spring hover:shadow-2xl hover:-translate-y-1.5 transition-all duration-500 cursor-pointer data-stagger-index="10">
+        <div className="group relative rounded-[2px] bg-destructive/5 backdrop-blur-sm border border-destructive/30 shadow-xl p-6 lg:p-8 hover-spring hover:shadow-2xl hover:-translate-y-1.5 transition-all duration-500 cursor-pointer" data-stagger-index="10">
           <button onClick={logout} className="w-full flex items-center gap-4 text-destructive hover:text-destructive-foreground hover:bg-destructive/10 hover-spring transition-all duration-300">
             <div className="w-14 h-14 rounded-[2px] bg-destructive/20 flex items-center justify-center shadow-md ring-1 ring-destructive/40 group-hover:scale-110 group-hover:rotate-12 transition-all duration-400 hover-spring">
               <LogOut size={24} strokeWidth={2.5} className="drop-shadow-lg" />

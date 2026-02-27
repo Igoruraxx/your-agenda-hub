@@ -123,7 +123,7 @@ const Evolution: React.FC = () => {
     <FeatureGate allowed={canAccessEvolution} title="Módulo de Evolução" description="Acompanhe a evolução dos seus alunos com fotos, bioimpedância e medidas corporais.">
       <div className="px-4 py-4">
         {/* Student selector */}
-        <div className="relative group mb-8 lg:mb-12 data-stagger-index="1"" data-stagger-index="1">
+        <div className="relative group mb-8 lg:mb-12" data-stagger-index="1">
           <div className="rounded-[2px] bg-gradient-to-br from-card/95 via-card to-card/90 backdrop-blur-xl border border-border/50 shadow-2xl p-6 lg:p-8 hover-spring hover:shadow-3xl hover:-translate-y-2 transition-all duration-700 overflow-hidden hover:z-20">
             <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-transparent to-accent/5 -skew-x-3 -translate-x-4 group-hover:translate-x-0 transition-transform duration-1000" />
             <button onClick={() => setShowStudentDropdown(!showStudentDropdown)} className="relative flex items-center justify-between w-full text-left">
@@ -156,7 +156,7 @@ const Evolution: React.FC = () => {
         </div>
 
         {/* Tabs assimétricos */}
-        <div className="relative mb-8 lg:mb-12 data-stagger-index="2"" data-stagger-index="2">
+        <div className="relative mb-8 lg:mb-12" data-stagger-index="2">
           <div className="flex flex-col lg:flex-row gap-2 lg:gap-3 items-start lg:items-end -ml-2 lg:-ml-4 [&>*]:hover:z-20">
             {tabs.map((tab, i) => (
               <button 
@@ -179,7 +179,7 @@ const Evolution: React.FC = () => {
 
         {/* Add button */}
         {selectedStudentId && activeTab !== 'charts' && (
-          <div className="group relative mb-8 lg:mb-12 data-stagger-index="6"" data-stagger-index="6">
+          <div className="group relative mb-8 lg:mb-12" data-stagger-index="6">
             <button onClick={() => { if (activeTab === 'photos') setShowPhotoModal(true); else if (activeTab === 'bioimpedance') setShowBioModal(true); else setShowMeasModal(true); }}
               className="rounded-[2px] bg-gradient-to-br from-primary via-accent to-primary border border-primary/50 shadow-2xl hover:shadow-3xl hover-spring hover:-translate-y-2 hover:scale-[1.02] p-6 lg:p-8 transition-all duration-700 font-black tracking-[-0.03em] text-lg lg:text-xl uppercase text-primary-foreground w-full relative overflow-hidden z-10 hover:z-20">
               <div className="absolute inset-0 bg-gradient-to-r from-accent/20 to-primary/20 -skew-x-6 -translate-x-full group-hover:translate-x-0 transition-transform duration-1000" />
@@ -218,7 +218,7 @@ const Evolution: React.FC = () => {
         {activeTab === 'bioimpedance' && (
           <div className="space-y-5 lg:space-y-6 pt-2">
             {filteredBio.length === 0 ? (
-              <div className="relative h-64 lg:h-72 flex flex-col items-center justify-center rounded-[2px] bg-gradient-to-br from-muted/60 to-card/90 backdrop-blur-xl border border-border/40 shadow-2xl data-stagger-index="15"" data-stagger-index="15">
+              <div className="relative h-64 lg:h-72 flex flex-col items-center justify-center rounded-[2px] bg-gradient-to-br from-muted/60 to-card/90 backdrop-blur-xl border border-border/40 shadow-2xl" data-stagger-index="15">
                 <TrendingUp size={56} strokeWidth={1.5} className="mx-auto mb-6 text-muted-foreground/50 rotate-12" />
                 <p className="text-xl lg:text-2xl font-black tracking-[-0.05em] text-muted-foreground/80 text-center leading-tight drop-shadow-lg">Nenhum registro de bioimpedância</p>
               </div>
@@ -275,7 +275,7 @@ const Evolution: React.FC = () => {
         {activeTab === 'measurements' && (
           <div className="space-y-5 lg:space-y-6 pt-2">
             {filteredMeas.length === 0 ? (
-              <div className="relative h-64 lg:h-72 flex flex-col items-center justify-center rounded-[2px] bg-gradient-to-br from-muted/60 to-card/90 backdrop-blur-xl border border-border/40 shadow-2xl data-stagger-index="25"" data-stagger-index="25">
+              <div className="relative h-64 lg:h-72 flex flex-col items-center justify-center rounded-[2px] bg-gradient-to-br from-muted/60 to-card/90 backdrop-blur-xl border border-border/40 shadow-2xl" data-stagger-index="25">
                 <Pencil size={56} strokeWidth={1.5} className="mx-auto mb-6 text-muted-foreground/50 -rotate-6" />
                 <p className="text-xl lg:text-2xl font-black tracking-[-0.05em] text-muted-foreground/80 text-center leading-tight drop-shadow-lg">Nenhuma medida registrada</p>
               </div>
@@ -380,7 +380,7 @@ const Evolution: React.FC = () => {
         {/* Photo modal - Brutal redesign */}
         {showPhotoModal && (
           <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-foreground/60 backdrop-blur-sm">
-            <div className="group relative w-full max-w-2xl mx-4 max-h-[90vh] overflow-hidden rounded-[2px] bg-gradient-to-br from-card/98 via-card to-card/95 backdrop-blur-3xl border border-border/70 shadow-2xl hover:shadow-4xl hover-spring hover:-translate-y-1 transition-all duration-700 data-stagger-index="45"" data-stagger-index="45">
+            <div className="group relative w-full max-w-2xl mx-4 max-h-[90vh] overflow-hidden rounded-[2px] bg-gradient-to-br from-card/98 via-card to-card/95 backdrop-blur-3xl border border-border/70 shadow-2xl hover:shadow-4xl hover-spring hover:-translate-y-1 transition-all duration-700" data-stagger-index="45">
               <div className="absolute inset-0 bg-gradient-to-r from-primary/3 via-transparent to-accent/3 -skew-x-2 -translate-x-12 group-hover:translate-x-0 transition-transform duration-1200" />
               <div className="p-8 lg:p-10 relative z-10">
                 <div className="flex items-start justify-between mb-8 lg:mb-12">
