@@ -25,14 +25,16 @@ import { useAuth } from "../contexts/AuthContext";
 import { PLAN_LIMITS } from "../types";
 import { useStudents } from "../hooks/useStudents";
 import { useAppointments } from "../hooks/useAppointments";
-import { isToday, isTomorrow, isAfter, isSameDay, format } from "date-fns";
-// ── Dados mock da assinatura ──
-const MOCK_SUBSCRIPTION = {
-  startDate: "2025-01-15",
-  endDate: "2026-01-15",
-  daysRemaining: 326,
-  paymentMethod: "Pix",
-  value: "R$ 24,99/mês",
+import { isToday, isTomorrow, isAfter, isSameDay, format, differenceInDays } from "date-fns";
+import { supabase } from '../lib/supabase';
+import { STRIPE_PLANS } from '../lib/stripe';
+
+// Maps UI plan ids to Stripe price IDs (3m/6m reuse monthly — no separate Stripe price)
+const PLAN_PRICE_MAP: Record<string, string> = {
+  '1m':  STRIPE_PLANS.monthly.price_id,
+  '3m':  STRIPE_PLANS.monthly.price_id,
+  '6m':  STRIPE_PLANS.monthly.price_id,
+  '12m': STRIPE_PLANS.yearly.price_id,
 };
 
 const PLANS = [
@@ -110,11 +112,38 @@ const UserPanel: React.FC = () => {
 
   const [editingNotifications, setEditingNotifications] = useState(false);
   const [notifications, setNotifications] = useState(getStoredNotifications);
+  const [checkingOut, setCheckingOut] = useState(false);
 
   // Subscription flow state
   const [subExpanded, setSubExpanded] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState("6m");
   const [selectedPayment, setSelectedPayment] = useState<PaymentMethod>("pix");
+
+  const handleCheckout = async () => {
+    if (!selectedPlan || !selectedPayment || checkingOut) return;
+    setCheckingOut(true);
+    try {
+      const priceId = PLAN_PRICE_MAP[selectedPlan];
+      const { data, error } = await supabase.functions.invoke('create-checkout', {
+        body: { priceId },
+      });
+      if (error) throw new Error(error.message);
+      if (data?.url) window.location.href = data.url;
+    } catch (e) {
+      console.error('[UserPanel] Checkout error:', e);
+      alert('Erro ao iniciar pagamento. Tente novamente.');
+    } finally {
+      setCheckingOut(false);
+    }
+  };
+
+  // Real subscription data from currentUser
+  const subEndDate = currentUser.subscriptionEndDate
+    ? new Date(currentUser.subscriptionEndDate)
+    : null;
+  const subDaysRemaining = subEndDate
+    ? Math.max(0, differenceInDays(subEndDate, new Date()))
+    : 0;
 
   const activeStudentsCount = students.filter((s) => s.isActive).length;
   const monthlyRevenue = students.reduce(
@@ -164,8 +193,6 @@ const UserPanel: React.FC = () => {
   const hour = new Date().getHours();
   const greeting =
     hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
-  const sub = MOCK_SUBSCRIPTION;
-
   return (
     <div className="animate-fade-in-up">
       {/* Header */}
@@ -489,7 +516,7 @@ const UserPanel: React.FC = () => {
                       className="text-sm font-bold"
                       style={{ color: "var(--n-900)" }}
                     >
-                      {fmt(sub.startDate)}
+                      —
                     </div>
                   </div>
                   <div className="px-4 py-3">
@@ -503,7 +530,7 @@ const UserPanel: React.FC = () => {
                       className="text-sm font-bold"
                       style={{ color: "var(--n-900)" }}
                     >
-                      {fmt(sub.endDate)}
+                      {subEndDate ? fmt(subEndDate.toISOString().slice(0, 10)) : "—"}
                     </div>
                   </div>
                 </div>
@@ -518,12 +545,12 @@ const UserPanel: React.FC = () => {
                     className="text-sm font-extrabold"
                     style={{
                       color:
-                        sub.daysRemaining <= 30
+                        subDaysRemaining <= 30
                           ? "var(--warning)"
                           : "var(--accent)",
                     }}
                   >
-                    {sub.daysRemaining} dias
+                    {subDaysRemaining} dias
                   </span>
                 </div>
               </div>
@@ -910,9 +937,14 @@ const UserPanel: React.FC = () => {
                 {/* CTA Confirmar */}
                 <button
                   className="btn btn-primary w-full py-3.5 text-sm font-extrabold"
-                  disabled={!selectedPayment}
+                  disabled={!selectedPayment || checkingOut}
+                  onClick={handleCheckout}
                 >
-                  {isPremium ? "Confirmar renovação" : "Assinar Premium agora"}
+                  {checkingOut
+                    ? "Aguarde..."
+                    : isPremium
+                      ? "Confirmar renovação"
+                      : "Assinar Premium agora"}
                 </button>
                 <div className="flex items-center justify-center gap-1.5">
                   <Shield size={11} style={{ color: "var(--n-400)" }} />

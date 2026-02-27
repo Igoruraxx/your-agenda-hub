@@ -102,14 +102,18 @@ const AdminPanel: React.FC = () => {
 
   const handleDeleteUser = async (userId: string) => {
     if (!confirm('Tem certeza? Isso removerá o usuário e todos os seus dados.')) return;
-    await supabase.from('appointments').delete().eq('user_id', userId);
-    await supabase.from('payments').delete().eq('user_id', userId);
-    await supabase.from('students').delete().eq('user_id', userId);
-    await supabase.from('user_roles').delete().eq('user_id', userId);
-    const { error } = await supabase.from('profiles').delete().eq('id', userId);
-    if (!error) {
+    try {
+      await supabase.from('appointments').delete().eq('user_id', userId);
+      await supabase.from('payments').delete().eq('user_id', userId);
+      await supabase.from('students').delete().eq('user_id', userId);
+      await supabase.from('user_roles').delete().eq('user_id', userId);
+      const { error } = await supabase.from('profiles').delete().eq('id', userId);
+      if (error) throw new Error(error.message);
       setUsers(prev => prev.filter(u => u.id !== userId));
       setSelectedUserId(null);
+    } catch (e) {
+      console.error('[AdminPanel] Delete user error:', e);
+      alert('Erro ao remover usuário. Tente novamente.');
     }
   };
 

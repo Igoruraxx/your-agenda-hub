@@ -17,7 +17,7 @@ const Students: React.FC = () => {
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
-  const [filterPlan, setFilterPlan] = useState<'all' | 'monthly' | 'session'>('all');
+  const [filterPlan, setFilterPlan] = useState<'all' | 'monthly' | 'session' | 'long_term'>('all');
   const [saving, setSaving] = useState(false);
   const [modalTab, setModalTab] = useState<'data' | 'access'>('data');
   const [formData, setFormData] = useState<Partial<Student>>({
@@ -343,13 +343,14 @@ const Students: React.FC = () => {
           </div>
           <select
             value={filterPlan}
-            onChange={(e) => setFilterPlan(e.target.value as 'all' | 'monthly' | 'session')}
+            onChange={(e) => setFilterPlan(e.target.value as 'all' | 'monthly' | 'session' | 'long_term')}
             className="input-base text-xs flex-shrink-0"
             style={{width:'auto',minWidth:'120px',padding:'0.5rem 0.75rem'}}
           >
             <option value="all">Todos planos</option>
             <option value="monthly">Mensal</option>
             <option value="session">Sessão</option>
+            <option value="long_term">Antecipado</option>
           </select>
         </div>
       </div>

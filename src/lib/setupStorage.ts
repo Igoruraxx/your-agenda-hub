@@ -1,8 +1,8 @@
 import { supabase } from './supabase';
 
 const BUCKETS = [
-  { name: 'evolution-photos',    public: false },
-  { name: 'bioimpedance-images', public: false },
+  { name: 'evolution-photos',    public: true },
+  { name: 'bioimpedance-images', public: true },
 ];
 
 /**
