@@ -42,6 +42,7 @@ export function useAppointments() {
 
     if (err) {
       setError(err.message);
+      console.error('[useAppointments] Erro ao buscar:', err.message);
     } else {
       const grouped: Record<string, Appointment[]> = {};
       (data || []).forEach((row: any) => {
@@ -59,22 +60,29 @@ export function useAppointments() {
     fetchAppointments();
   }, [fetchAppointments]);
 
+  // Realtime subscription
   useEffect(() => {
     if (!isAuthenticated || !currentUser.id) return;
 
     const channel = supabase
       .channel('appointments-changes')
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'appointments',
-        filter: `user_id=eq.${currentUser.id}`,
-      }, () => {
-        fetchAppointments();
-      })
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'appointments',
+          filter: `user_id=eq.${currentUser.id}`,
+        },
+        () => {
+          fetchAppointments();
+        }
+      )
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [currentUser.id, isAuthenticated, fetchAppointments]);
 
   const addAppointment = useCallback(async (apt: {
@@ -85,6 +93,7 @@ export function useAppointments() {
     duration?: number;
   }) => {
     if (!currentUser.id) return null;
+
     const insert: DbAppointmentInsert = {
       user_id: currentUser.id,
       student_id: apt.studentId,
@@ -99,7 +108,10 @@ export function useAppointments() {
       .select()
       .single();
 
-    if (err) throw new Error(err.message);
+    if (err) {
+      console.error('[useAppointments] Erro ao adicionar:', err.message);
+      throw new Error(err.message);
+    }
 
     const newApt = dbToAppointment(data as DbAppointment, apt.studentName);
     setAppointments(prev => {
@@ -111,14 +123,30 @@ export function useAppointments() {
   }, [currentUser.id]);
 
   const updateAppointment = useCallback(async (id: string, updates: Partial<DbAppointmentUpdate>) => {
-    const { error: err } = await supabase.from('appointments').update(updates).eq('id', id);
-    if (err) throw new Error(err.message);
+    const { error: err } = await supabase
+      .from('appointments')
+      .update(updates)
+      .eq('id', id);
+
+    if (err) {
+      console.error('[useAppointments] Erro ao atualizar:', err.message);
+      throw new Error(err.message);
+    }
+
     await fetchAppointments();
   }, [fetchAppointments]);
 
   const deleteAppointment = useCallback(async (id: string) => {
-    const { error: err } = await supabase.from('appointments').delete().eq('id', id);
-    if (err) throw new Error(err.message);
+    const { error: err } = await supabase
+      .from('appointments')
+      .delete()
+      .eq('id', id);
+
+    if (err) {
+      console.error('[useAppointments] Erro ao deletar:', err.message);
+      throw new Error(err.message);
+    }
+
     setAppointments(prev => {
       const updated: Record<string, Appointment[]> = {};
       Object.entries(prev).forEach(([key, apts]) => {
@@ -136,5 +164,14 @@ export function useAppointments() {
     });
   }, [updateAppointment]);
 
-  return { appointments, loading, error, addAppointment, updateAppointment, deleteAppointment, markSessionDone, refetch: fetchAppointments };
+  return {
+    appointments,
+    loading,
+    error,
+    addAppointment,
+    updateAppointment,
+    deleteAppointment,
+    markSessionDone,
+    refetch: fetchAppointments,
+  };
 }

@@ -14,15 +14,23 @@ const Login: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (!email || !password) { setError('Preencha todos os campos.'); return; }
-
+    if (!email || !password) {
+      setError('Preencha todos os campos.');
+      return;
+    }
+    
+    // Validação de email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) { setError('Por favor, insira um e-mail válido.'); return; }
-
+    if (!emailRegex.test(email)) {
+      setError('Por favor, insira um e-mail válido.');
+      return;
+    }
+    
     setLoading(true);
     try {
       await login(email, password);
-    } catch {
+    } catch (error) {
+      console.error('Login error:', error);
       setError('E-mail ou senha inválidos.');
     } finally {
       setLoading(false);
@@ -32,85 +40,104 @@ const Login: React.FC = () => {
   return (
     <AuthLayout>
       <div className="space-y-5">
+        {/* Title */}
         <div className="text-center mb-6">
-          <h2 className="text-xl font-bold text-foreground">Bem-vindo de volta</h2>
-          <p className="text-sm mt-1 text-muted-foreground">Entre na sua conta para continuar</p>
+          <h2 className="text-xl font-bold" style={{color:'var(--n-900)'}}>Bem-vindo de volta</h2>
+          <p className="text-sm mt-1" style={{color:'var(--n-500)'}}>Entre na sua conta para continuar</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Email */}
           <div className="space-y-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">E-mail</label>
+            <label className="text-xs font-semibold uppercase tracking-wider" style={{color:'var(--n-500)'}}>E-mail</label>
             <div className="relative">
-              <Mail size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2" style={{color:'var(--n-400)'}} />
               <input
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 placeholder="seu@email.com"
-                className="input-field pl-11"
                 autoComplete="email"
+                className="input-base w-full pl-10 pr-4"
               />
             </div>
           </div>
 
+          {/* Password */}
           <div className="space-y-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Senha</label>
+            <label className="text-xs font-semibold uppercase tracking-wider" style={{color:'var(--n-500)'}}>Senha</label>
             <div className="relative">
-              <Lock size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2" style={{color:'var(--n-400)'}} />
               <input
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="input-field pl-11 pr-11"
                 autoComplete="current-password"
+                className="input-base w-full pl-10 pr-11"
               />
               <button
                 type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+                onClick={() => setShowPassword(v => !v)}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 transition-colors touch-manipulation"
+                style={{color:'var(--n-400)'}}
               >
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
           </div>
 
+          {/* Forgot password */}
           <div className="flex justify-end">
             <button
               type="button"
               onClick={() => setAuthScreen('forgot')}
-              className="text-xs font-medium text-primary hover:underline"
+              className="text-xs font-medium transition-colors touch-manipulation"
+              style={{color:'var(--accent)'}}
             >
               Esqueci minha senha
             </button>
           </div>
 
+          {/* Error */}
           {error && (
-            <div className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2 text-center">
-              {error}
+            <div className="rounded-lg px-4 py-2.5" style={{background:'var(--error-light)',border:'1px solid var(--error)'}}>
+              <p className="text-xs font-medium" style={{color:'var(--error)'}}>{error}</p>
             </div>
           )}
 
+          {/* Submit */}
           <button
             type="submit"
             disabled={loading}
-            className="btn btn-primary w-full py-3 text-sm font-bold"
+            className="btn btn-primary w-full py-3 text-sm font-bold mt-2 disabled:opacity-50"
           >
-            {loading ? <Loader2 size={18} className="animate-spin" /> : (
-              <>Entrar <ArrowRight size={16} /></>
+            {loading ? (
+              <Loader2 size={18} className="animate-spin" />
+            ) : (
+              <>
+                Entrar
+                <ArrowRight size={16} />
+              </>
             )}
           </button>
         </form>
 
-        <div className="relative flex items-center py-2">
-          <div className="flex-1 border-t border-border" />
-          <span className="px-3 text-xs text-muted-foreground">ou</span>
-          <div className="flex-1 border-t border-border" />
+        {/* Divider */}
+        <div className="flex items-center gap-3 my-2">
+          <div className="flex-1 h-px" style={{background:'var(--n-200)'}} />
+          <span className="text-xs" style={{color:'var(--n-400)'}}>ou</span>
+          <div className="flex-1 h-px" style={{background:'var(--n-200)'}} />
         </div>
 
-        <p className="text-center text-sm text-muted-foreground">
+        {/* Register link */}
+        <p className="text-center text-sm" style={{color:'var(--n-500)'}}>
           Não tem uma conta?{' '}
-          <button onClick={() => setAuthScreen('register')} className="font-semibold text-primary hover:underline">
+          <button
+            onClick={() => setAuthScreen('register')}
+            className="font-semibold transition-colors touch-manipulation"
+            style={{color:'var(--accent)'}}
+          >
             Criar conta grátis
           </button>
         </p>

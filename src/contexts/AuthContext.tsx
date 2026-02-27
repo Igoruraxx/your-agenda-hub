@@ -19,7 +19,7 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>; /* FIX 1 */
   upgradeToPremium: () => void;
   downgradeToFree: () => void;
   updateUser: (updates: Partial<User>) => void;
@@ -27,42 +27,49 @@ interface AuthContextValue {
 }
 
 const EMPTY_USER: User = {
-  id: '', name: '', email: '', plan: 'free', isAdmin: false,
-  notifications: { enabled: true, notifyBefore: true, notifyAtTime: true, dailyListTime: '08:00' },
+  id: '',
+  name: '',
+  email: '',
+  plan: 'free',
+  isAdmin: false,
+  notifications: {
+    enabled: true,
+    notifyBefore: true,
+    notifyAtTime: true,
+    dailyListTime: '08:00',
+  },
+  subscription: {
+    plan: 'free',
+    status: 'expired',
+    startDate: '',
+    endDate: '',
+    origin: 'trial',
+    history: [],
+  },
 };
 
 function profileToUser(profile: Profile): User {
   return {
-    id: profile.id, 
-    name: profile.name, 
+    id: profile.id,
+    name: profile.name,
     email: profile.email,
-    role: profile.role,
-    parentProfileId: profile.parent_id ?? undefined,
-    plan: profile.plan as UserPlan, 
+    plan: profile.plan as UserPlan,
     isAdmin: profile.is_admin,
     notifications: {
-      enabled: profile.notifications_enabled, 
+      enabled: profile.notifications_enabled,
       notifyBefore: profile.notify_before,
-      notifyAtTime: profile.notify_at_time, 
+      notifyAtTime: profile.notify_at_time,
       dailyListTime: profile.daily_list_time,
     },
-  };
-}
-
-/** Check if premium has expired and downgrade if needed */
-async function checkPremiumExpiration(profile: Profile): Promise<Profile> {
-  if (profile.plan === 'premium' && profile.premium_expires_at) {
-    const expires = new Date(profile.premium_expires_at);
-    if (expires < new Date()) {
-      // Expired - downgrade to free
-      await supabase.from('profiles').update({
-        plan: 'free',
-        premium_origin: profile.premium_origin || 'trial',
-      }).eq('id', profile.id);
-      return { ...profile, plan: 'free' };
+    subscription: {
+      plan: profile.plan as UserPlan,
+      status: (profile.subscription_end_date && new Date(profile.subscription_end_date) > new Date()) ? 'active' : 'expired',
+      startDate: profile.created_at.split('T')[0],
+      endDate: profile.subscription_end_date || '',
+      origin: (profile.subscription_origin as any) || 'trial',
+      history: Array.isArray(profile.subscription_history) ? profile.subscription_history as any : [],
     }
-  }
-  return profile;
+  };
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -79,12 +86,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isPremium = currentUser.plan === 'premium';
   const isAdmin = currentUser.isAdmin;
 
+  // Busca o perfil e atualiza currentUser
   const fetchProfile = useCallback(async (userId: string): Promise<Profile | null> => {
     try {
-      const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
       if (!error && data) {
-        const checked = await checkPremiumExpiration(data as Profile);
-        return checked;
+        return data as Profile;
       }
     } catch (e) {
       console.error("Error fetching profile:", e);
@@ -92,70 +103,94 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return null;
   }, []);
 
+  // Efeito 1: onAuthStateChange — ÚNICA fonte de verdade da sessão
   useEffect(() => {
     let resolved = false;
-    mountedRef.current = true;
 
+    const logSession = (label: string, session: Session | null) => {
+      const userId = session?.user?.id ?? 'none';
+      const expires = session?.expires_at ? new Date(session.expires_at * 1000).toISOString() : 'n/a';
+      console.log(`[Auth] ${label} user=${userId} expires=${expires}`);
+    };
+
+    // Força a busca imediata da sessão do localStorage ao montar
     const initSession = async () => {
       try {
         const { data, error } = await supabase.auth.getSession();
-        if (error) console.warn('[Auth] getSession error:', error.message);
+        if (error) {
+          console.warn('[Auth] getSession error:', error.message);
+        }
         const s = data.session;
         if (s?.user) {
+          logSession('init session found', s);
           const profile = await fetchProfile(s.user.id);
-          if (mountedRef.current && profile) setCurrentUser(profileToUser(profile));
+          if (mountedRef.current && profile) {
+            setCurrentUser(profileToUser(profile));
+          }
           setSession(s);
+        } else {
+          logSession('init session empty', s);
         }
       } finally {
-        if (mountedRef.current && !resolved) { resolved = true; setLoading(false); }
+        if (mountedRef.current && !resolved) {
+          resolved = true;
+          setLoading(false);
+        }
       }
     };
 
     initSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
-      setSession(s ?? null);
-      if (s?.user) {
-        setTimeout(async () => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, s) => {
+        logSession(`state change ${event}`, s ?? null);
+        setSession(s ?? null);
+        
+        if (s?.user) {
           const profile = await fetchProfile(s.user.id);
           if (mountedRef.current) {
-            if (profile) setCurrentUser(profileToUser(profile));
-            else setTimeout(async () => {
-              const retry = await fetchProfile(s.user.id);
-              if (mountedRef.current && retry) setCurrentUser(profileToUser(retry));
-            }, 1000);
+            if (profile) {
+              setCurrentUser(profileToUser(profile));
+            } else {
+              // Se não achou perfil, tenta mais uma vez após 1s (fallback para delays de trigger)
+              setTimeout(async () => {
+                const retryProfile = await fetchProfile(s.user.id);
+                if (mountedRef.current && retryProfile) {
+                  setCurrentUser(profileToUser(retryProfile));
+                }
+              }, 1000);
+            }
           }
+          // Garante que os buckets de storage existem
           ensureStorageBuckets();
-        }, 0);
-      } else {
-        setCurrentUser(EMPTY_USER);
+        } else {
+          // Caso o SDK remova a sessão (ex.: refresh falhou), limpamos o usuário local
+          setCurrentUser(EMPTY_USER);
+        }
+        
+        // Finaliza o loading apenas na primeira vez que o estado é conhecido
+        if (mountedRef.current && !resolved) {
+          resolved = true;
+          setLoading(false);
+        }
       }
-      if (mountedRef.current && !resolved) { resolved = true; setLoading(false); }
-    });
+    );
 
-    const safetyTimeout = setTimeout(() => { if (!resolved) { resolved = true; setLoading(false); } }, 4000);
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        supabase.auth.getSession().then(async ({ data: { session: freshSession } }) => {
-          if (!mountedRef.current) return;
-          if (freshSession?.user) {
-            setSession(freshSession);
-            const profile = await fetchProfile(freshSession.user.id);
-            if (mountedRef.current && profile) setCurrentUser(profileToUser(profile));
-          }
-        });
+    // Safety net: se o onAuthStateChange não disparar em 4s, libera o loading
+    const safetyTimeout = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        setLoading(false);
       }
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+    }, 4000);
 
     return () => {
-      mountedRef.current = false;
       clearTimeout(safetyTimeout);
       subscription.unsubscribe();
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      mountedRef.current = false; /* FIX 2 */
     };
   }, [fetchProfile]);
+
 
   const login = useCallback(async (email: string, password: string) => {
     if (!email || !password) throw new Error('Email e senha são obrigatórios');
@@ -169,25 +204,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const register = useCallback(async (name: string, email: string, password: string) => {
     if (!name.trim() || !email || !password) throw new Error('Todos os campos são obrigatórios');
     if (password.length < 6) throw new Error('Senha deve ter pelo menos 6 caracteres');
-    const { data, error } = await supabase.auth.signUp({
-      email, password,
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
       options: { data: { name: name.trim() } },
     });
     if (error) {
       if (error.message.includes('already registered')) throw new Error('Este email já está cadastrado');
       throw new Error(error.message);
-    }
-
-    // Set trial: 7 days premium
-    if (data.user) {
-      const trialExpires = new Date();
-      trialExpires.setDate(trialExpires.getDate() + 7);
-      await supabase.from('profiles').update({
-        plan: 'premium',
-        premium_origin: 'trial',
-        trial_started_at: new Date().toISOString(),
-        premium_expires_at: trialExpires.toISOString(),
-      }).eq('id', data.user.id);
     }
   }, []);
 
@@ -207,14 +231,71 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const upgradeToPremium = useCallback(async () => {
     if (!session?.user) return;
-    const { error } = await supabase.from('profiles').update({ plan: 'premium' }).eq('id', session.user.id);
-    if (!error) setCurrentUser(prev => ({ ...prev, plan: 'premium' as UserPlan }));
+    const endDate = new Date();
+    endDate.setDate(endDate.getDate() + 7);
+    const endDateStr = endDate.toISOString().split('T')[0];
+    const startDateStr = new Date().toISOString().split('T')[0];
+
+    const newHistoryEntry = {
+      id: `h${Date.now()}`,
+      plan: 'premium',
+      origin: 'trial',
+      startDate: startDateStr,
+      endDate: endDateStr,
+      durationDays: 7,
+      addedBy: 'self_system',
+      note: 'Ativação de 7 dias grátis pelo app'
+    };
+
+    // Busca histórico atual para anexar
+    const { data: profile } = await supabase.from('profiles').select('subscription_history').eq('id', session.user.id).single();
+    const currentHistory = (profile && Array.isArray(profile.subscription_history)) ? (profile.subscription_history as any[]) : [];
+    const updatedHistory = [...currentHistory, newHistoryEntry];
+
+    const { error } = await supabase.from('profiles').update({ 
+      plan: 'premium',
+      subscription_end_date: endDateStr,
+      subscription_origin: 'trial',
+      subscription_history: updatedHistory
+    }).eq('id', session.user.id);
+
+    if (!error) {
+      setCurrentUser(prev => ({ 
+        ...prev, 
+        plan: 'premium' as UserPlan,
+        subscription: {
+          ...prev.subscription,
+          plan: 'premium',
+          status: 'active',
+          endDate: endDateStr,
+          origin: 'trial',
+          history: updatedHistory
+        }
+      }));
+    }
   }, [session]);
 
   const downgradeToFree = useCallback(async () => {
     if (!session?.user) return;
-    const { error } = await supabase.from('profiles').update({ plan: 'free' }).eq('id', session.user.id);
-    if (!error) setCurrentUser(prev => ({ ...prev, plan: 'free' as UserPlan }));
+    const { error } = await supabase.from('profiles').update({ 
+      plan: 'free',
+      subscription_end_date: null,
+      subscription_origin: 'trial' /* FIX 3 */
+    }).eq('id', session.user.id);
+    
+    if (!error) {
+      setCurrentUser(prev => ({ 
+        ...prev, 
+        plan: 'free' as UserPlan,
+        subscription: {
+          ...prev.subscription,
+          plan: 'free',
+          status: 'expired',
+          endDate: '',
+          origin: 'trial' // Mantém o origin ou ajusta conforme necessário
+        }
+      }));
+    }
   }, [session]);
 
   const updateUser = useCallback(async (updates: Partial<User>) => {

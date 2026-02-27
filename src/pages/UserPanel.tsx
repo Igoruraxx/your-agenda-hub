@@ -1,210 +1,1155 @@
-import React, { useState } from 'react';
-import { Crown, Bell, BellOff, LogOut, Calendar, Users, Shield, CheckCircle2 } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
-import { PLAN_LIMITS } from '../types';
-import { useStudents } from '../hooks/useStudents';
-import { useAppointments } from '../hooks/useAppointments';
-import { format } from 'date-fns';
+import React, { useState } from "react";
+import {
+  CreditCard,
+  Bell,
+  BellOff,
+  Crown,
+  Users,
+  Check,
+  FlaskConical,
+  Shield,
+  LogOut,
+  Calendar,
+  Clock,
+  Plus,
+  Tag,
+  Sparkles,
+  QrCode,
+  WalletCards,
+  PlusCircle,
+  CheckCircle,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
+import { useAuth } from "../contexts/AuthContext";
+import { PLAN_LIMITS } from "../types";
+import { useStudents } from "../hooks/useStudents";
+import { useAppointments } from "../hooks/useAppointments";
+import { isToday, isTomorrow, isAfter, isSameDay, format } from "date-fns";
+// ── Dados mock da assinatura ──
+const MOCK_SUBSCRIPTION = {
+  startDate: "2025-01-15",
+  endDate: "2026-01-15",
+  daysRemaining: 326,
+  paymentMethod: "Pix",
+  value: "R$ 24,99/mês",
+};
+
+const PLANS = [
+  {
+    id: "1m",
+    label: "1 mês",
+    price: "R$ 24,99",
+    perMonth: "R$ 24,99/mês",
+    note: "Cobrança mensal",
+  },
+  {
+    id: "3m",
+    label: "3 meses",
+    price: "R$ 69,90",
+    perMonth: "R$ 23,30/mês",
+    note: "3x R$ 23,30",
+    tag: "7% OFF",
+  },
+  {
+    id: "6m",
+    label: "6 meses",
+    price: "R$ 129,90",
+    perMonth: "R$ 21,65/mês",
+    note: "À vista",
+    tag: "13% OFF",
+    recommended: true,
+  },
+  {
+    id: "12m",
+    label: "12 meses",
+    price: "R$ 239,90",
+    perMonth: "R$ 19,99/mês",
+    note: "À vista",
+    tag: "20% OFF",
+  },
+];
+
+const fmt = (d: string) => {
+  if (!d) return "—";
+  return new Date(d).toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+};
+
+type PaymentMethod = "pix" | "wallet" | "card" | null;
 
 const UserPanel: React.FC = () => {
-  const { currentUser, isPremium, logout, updateUser, upgradeToPremium, downgradeToFree } = useAuth();
+  const {
+    currentUser,
+    updateUser,
+    isPremium,
+    upgradeToPremium,
+    downgradeToFree,
+    logout,
+  } = useAuth();
+  const planLimits = PLAN_LIMITS[currentUser.plan];
+
   const { students } = useStudents();
   const { appointments } = useAppointments();
-  const [showNotifSettings, setShowNotifSettings] = useState(false);
 
-  const planLimits = PLAN_LIMITS[currentUser.plan];
-  const activeStudents = students.filter(s => s.isActive).length;
+  const [editingNotifications, setEditingNotifications] = useState(false);
 
-  const todayKey = format(new Date(), 'yyyy-MM-dd');
-  const todayApts = appointments[todayKey] || [];
-  const attendedToday = todayApts.filter(a => a.sessionDone);
-  const pendingToday = todayApts.filter(a => !a.sessionDone);
+  // Subscription flow state
+  const [subExpanded, setSubExpanded] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState("6m");
+  const [selectedPayment, setSelectedPayment] = useState<PaymentMethod>("pix");
 
-  const tomorrowDate = new Date();
-  tomorrowDate.setDate(tomorrowDate.getDate() + 1);
-  const tomorrowKey = format(tomorrowDate, 'yyyy-MM-dd');
-  const tomorrowApts = appointments[tomorrowKey] || [];
+  const activeStudentsCount = students.filter((s) => s.isActive).length;
+  const monthlyRevenue = students.reduce(
+    (acc, s) => acc + (s.isActive ? Number(s.value || 0) : 0),
+    0,
+  );
+
+  const allAppointments = Object.values(appointments).flat();
+  const sessionsDone = allAppointments.filter((a) => a.sessionDone).length;
+
+  const now = new Date();
+  const nextAppointments = allAppointments
+    .filter(
+      (a) => !a.sessionDone && (isSameDay(a.date, now) || isAfter(a.date, now)),
+    )
+    .sort((a, b) => {
+      if (a.date < b.date) return -1;
+      if (a.date > b.date) return 1;
+      return a.time.localeCompare(b.time);
+    })
+    .slice(0, 3)
+    .map((a) => ({
+      name: a.studentName,
+      time: a.time,
+      day: isToday(a.date)
+        ? "Hoje"
+        : isTomorrow(a.date)
+          ? "Amanhã"
+          : format(a.date, "dd/MM"),
+    }));
+
+  const handleNotificationChange = (
+    field: keyof typeof currentUser.notifications,
+    value: any,
+  ) => {
+    updateUser({
+      notifications: {
+        ...currentUser.notifications,
+        [field]: value,
+      },
+    });
+  };
+
+  const initials = currentUser.name
+    .split(" ")
+    .slice(0, 2)
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase();
+  const hour = new Date().getHours();
+  const greeting =
+    hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
+  const sub = MOCK_SUBSCRIPTION;
 
   return (
-    <div className="px-4 sm:px-6 lg:px-8 py-8 lg:py-12 min-h-[100dvh] scroll-mt-20 snap-start" data-stagger-index="0">
-      {/* Profile header */}
-      <div className="relative group mb-8 lg:mb-12" data-stagger-index="1">
-        <div className="rounded-[2px] bg-gradient-to-br from-card/95 via-card to-card/90 backdrop-blur-xl border border-border/50 shadow-2xl p-6 lg:p-8 hover-spring hover:shadow-3xl hover:-translate-y-2 transition-all duration-700 overflow-hidden hover:z-20">
-          <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-transparent to-accent/5 -skew-x-3 -translate-x-4 group-hover:translate-x-0 transition-transform duration-1000" />
-          <div className="relative flex items-center gap-5 lg:gap-6">
-            <div className="w-20 h-20 lg:w-24 lg:h-24 rounded-[2px] bg-gradient-to-br from-primary via-accent to-primary flex items-center justify-center shadow-2xl ring-2 ring-primary/20 group-hover:scale-110 group-hover:ring-accent/40 transition-all duration-500 hover-spring">
-              <span className="text-2xl lg:text-3xl font-black text-primary-foreground drop-shadow-lg tracking-[-0.05em]">{currentUser.name.charAt(0).toUpperCase()}</span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <h2 className="text-2xl lg:text-3xl font-black tracking-[-0.03em] text-foreground leading-tight group-hover:text-accent transition-colors duration-500 drop-shadow-md">{currentUser.name}</h2>
-              <p className="text-base lg:text-lg font-medium text-muted-foreground/90 mt-1 tracking-wide">{currentUser.email}</p>
-              <div className="flex items-center gap-2 mt-3">
-                {isPremium ? (
-                  <span className="flex items-center gap-1.5 text-sm lg:text-base font-black text-warning bg-warning/20 px-4 py-1.5 rounded-[2px] shadow-lg ring-1 ring-warning/30 hover:bg-warning/30 hover-spring hover:scale-[1.05] transition-all duration-300 whitespace-nowrap">
-                    <Crown size={16} strokeWidth={2.5} /> Premium
-                  </span>
-                ) : (
-                  <span className="text-sm lg:text-base font-black text-muted-foreground/80 bg-muted/50 px-4 py-1.5 rounded-[2px] shadow-sm ring-1 ring-border/50 hover:bg-muted hover-spring hover:scale-[1.02] transition-all duration-200 whitespace-nowrap">
-                    Plano Gratuito
-                  </span>
-                )}
+    <div className="animate-fade-in-up">
+      {/* Header */}
+      <div className="page-header">
+        <div className="flex items-center gap-4">
+          <div
+            className="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background: "var(--accent)", color: "var(--n-0)" }}
+          >
+            <span className="text-xl font-extrabold">{initials}</span>
+          </div>
+          <div className="min-w-0 flex-1">
+            <p
+              className="text-xs font-medium mb-0.5"
+              style={{ color: "var(--n-500)" }}
+            >
+              {greeting}!
+            </p>
+            <h2
+              className="text-base font-extrabold truncate"
+              style={{ color: "var(--n-900)" }}
+            >
+              {currentUser.name}
+            </h2>
+            <p className="text-xs truncate" style={{ color: "var(--n-500)" }}>
+              {currentUser.email}
+            </p>
+          </div>
+          <span
+            className="flex-shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold"
+            style={
+              isPremium
+                ? {
+                    background: "var(--warning-light)",
+                    color: "var(--warning)",
+                    border: "1px solid var(--warning)",
+                  }
+                : {
+                    background: "var(--n-100)",
+                    color: "var(--n-500)",
+                    border: "1px solid var(--n-200)",
+                  }
+            }
+          >
+            {isPremium && <Crown size={11} />}
+            {isPremium ? "Premium" : "Gratuito"}
+          </span>
+        </div>
+      </div>
+
+      <div className="p-4 sm:p-5 space-y-4">
+        {/* Quick Stats */}
+        <div className="grid grid-cols-3 gap-2">
+          {[
+            {
+              label: "Clientes",
+              value: activeStudentsCount,
+              color: "var(--accent)",
+            },
+            {
+              label: "Receita",
+              value: `R$${monthlyRevenue}`,
+              color: "var(--success)",
+            },
+            { label: "Sessões", value: sessionsDone, color: "#8b5cf6" },
+          ].map((stat) => (
+            <div
+              key={stat.label}
+              className="rounded-lg p-2.5 text-center"
+              style={{
+                background: "var(--n-0)",
+                border: "1px solid var(--n-200)",
+              }}
+            >
+              <div
+                className="text-lg font-extrabold"
+                style={{ color: stat.color }}
+              >
+                {stat.value}
+              </div>
+              <div className="text-xs" style={{ color: "var(--n-500)" }}>
+                {stat.label}
               </div>
             </div>
-          </div>
+          ))}
         </div>
-      </div>
 
-      {/* Quick stats */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6 mb-8 lg:mb-12" data-stagger-index="2">
-        <div className="group relative rounded-[2px] bg-card/95 backdrop-blur-sm border border-border/50 shadow-xl p-6 lg:p-8 text-center hover-spring hover:shadow-2xl hover:-translate-y-2 hover:scale-[1.02] transition-all duration-500 z-10 lg:hover:z-20 lg:[&:nth-child(2)]:mt-4 lg:[&:nth-child(2)]:[-translate-x-4] lg:[&:nth-child(3)]:[translate-x-8] lg:[&:nth-child(3)]:shadow-[20px_0_40px_-10px_rgba(0,0,0,0.1)]">
-          <Calendar size={28} className="text-primary mx-auto mb-3 lg:mb-4 drop-shadow-lg group-hover:scale-110 group-hover:rotate-6 transition-all duration-400 stroke-primary/80" strokeWidth={2.5} />
-          <p className="text-3xl lg:text-4xl font-black tracking-[-0.05em] text-foreground drop-shadow-md mb-2 leading-none">{todayApts.length}</p>
-          <p className="text-xs lg:text-sm font-black tracking-widest uppercase text-muted-foreground/80 group-hover:text-accent transition-colors duration-300">Hoje</p>
-        </div>
-        <div className="group relative rounded-[2px] bg-card/95 backdrop-blur-sm border border-border/50 shadow-xl p-6 lg:p-8 text-center hover-spring hover:shadow-2xl hover:-translate-y-2 hover:scale-[1.02] transition-all duration-500 z-10 lg:hover:z-20 lg:[&:nth-child(2)]:mt-4 lg:[&:nth-child(2)]:[-translate-x-4] lg:[&:nth-child(3)]:[translate-x-8] lg:[&:nth-child(3)]:shadow-[20px_0_40px_-10px_rgba(0,0,0,0.1)]">
-          <Users size={28} className="text-accent mx-auto mb-3 lg:mb-4 drop-shadow-lg group-hover:scale-110 group-hover:rotate-6 transition-all duration-400 stroke-accent/80" strokeWidth={2.5} />
-          <p className="text-3xl lg:text-4xl font-black tracking-[-0.05em] text-foreground drop-shadow-md mb-2 leading-none">{activeStudents}</p>
-          <p className="text-xs lg:text-sm font-black tracking-widest uppercase text-muted-foreground/80 group-hover:text-accent transition-colors duration-300">Alunos</p>
-        </div>
-        <div className="group relative rounded-[2px] bg-card/95 backdrop-blur-sm border border-border/50 shadow-xl p-6 lg:p-8 text-center hover-spring hover:shadow-2xl hover:-translate-y-2 hover:scale-[1.02] transition-all duration-500 z-10 lg:hover:z-20 lg:[&:nth-child(2)]:mt-4 lg:[&:nth-child(2)]:[-translate-x-4] lg:[&:nth-child(3)]:[translate-x-8] lg:[&:nth-child(3)]:shadow-[20px_0_40px_-10px_rgba(0,0,0,0.1)]">
-          <CheckCircle2 size={28} className="text-success mx-auto mb-3 lg:mb-4 drop-shadow-lg group-hover:scale-110 group-hover:rotate-6 transition-all duration-400 stroke-success/80" strokeWidth={2.5} />
-          <p className="text-3xl lg:text-4xl font-black tracking-[-0.05em] text-foreground drop-shadow-md mb-2 leading-none">{attendedToday.length}</p>
-          <p className="text-xs lg:text-sm font-black tracking-widest uppercase text-muted-foreground/80 group-hover:text-accent transition-colors duration-300">Atendidos</p>
-        </div>
-      </div>
-
-      {/* Session lists */}
-      <div className="space-y-6 lg:space-y-8 mb-12" data-stagger-index="3">
-        {/* Attended today */}
-        {attendedToday.length > 0 && (
-          <div className="group relative rounded-[2px] bg-gradient-to-r from-success/5 to-success/2 backdrop-blur-sm border border-success/30 shadow-xl p-6 lg:p-8 hover-spring hover:shadow-2xl hover:-translate-y-1.5 transition-all duration-500" data-stagger-index="4">
-            <h3 className="text-sm lg:text-base font-black tracking-wider text-success uppercase mb-4 flex items-center gap-2 drop-shadow-md">
-              <CheckCircle2 size={20} strokeWidth={3} className="drop-shadow-lg" /> ATENDIDOS HOJE ({attendedToday.length})
+        {/* Next Appointments */}
+        <div
+          className="rounded-xl p-4"
+          style={{ background: "var(--n-0)", border: "1px solid var(--n-200)" }}
+        >
+          <div className="flex items-center gap-2.5 mb-3">
+            <div
+              className="p-2 rounded-lg"
+              style={{ background: "var(--accent-light)" }}
+            >
+              <Users size={16} style={{ color: "var(--accent)" }} />
+            </div>
+            <h3 className="text-sm font-bold" style={{ color: "var(--n-900)" }}>
+              Próximos Atendimentos
             </h3>
-            <div className="space-y-3">
-              {attendedToday.map((apt, idx) => (
-                <div key={apt.id} className="group/item flex items-center justify-between py-3 px-4 rounded-[1px] bg-white/20 backdrop-blur-sm hover:bg-white/40 hover-spring hover:scale-[1.02] transition-all duration-300 border border-success/20 hover:border-success/40">
-                  <span className="font-black text-base lg:text-lg text-foreground truncate group-hover/item:text-success transition-colors">{apt.studentName}</span>
-                  <div className="flex items-center gap-3 text-sm font-bold text-muted-foreground/80">
-                    <span>{apt.time}</span>
-                    {apt.muscleGroups && apt.muscleGroups.length > 0 && (
-                      <span className="text-xs px-2.5 py-1 bg-success/30 text-success font-black rounded-[1px] shadow-sm hover:bg-success/50 hover-spring">
-                        {apt.muscleGroups.length} grupos
-                      </span>
-                    )}
+          </div>
+          <div className="space-y-0">
+            {nextAppointments.map((apt, i) => (
+              <div
+                key={i}
+                className="flex items-center justify-between py-2.5 last:border-0"
+                style={{ borderBottom: "1px solid var(--n-100)" }}
+              >
+                <div className="flex items-center gap-2.5">
+                  <div
+                    className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                    style={{ background: "var(--accent)", color: "var(--n-0)" }}
+                  >
+                    <span className="text-xs font-bold">
+                      {apt.name.charAt(0)}
+                    </span>
+                  </div>
+                  <div>
+                    <div
+                      className="text-sm font-semibold"
+                      style={{ color: "var(--n-900)" }}
+                    >
+                      {apt.name}
+                    </div>
+                    <div className="text-xs" style={{ color: "var(--n-500)" }}>
+                      {apt.day} às {apt.time}
+                    </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Pending today */}
-        {pendingToday.length > 0 && (
-          <div className="group relative rounded-[2px] bg-gradient-to-r from-muted/10 to-muted/5 backdrop-blur-sm border border-border/50 shadow-xl p-6 lg:p-8 hover-spring hover:shadow-2xl hover:-translate-y-1.5 [-20px] transition-all duration-500" data-stagger-index="5">
-            <h3 className="text-sm lg:text-base font-black tracking-wider text-muted-foreground uppercase mb-4 flex items-center gap-2 drop-shadow-md">
-              PENDENTES HOJE ({pendingToday.length})
-            </h3>
-            <div className="space-y-3">
-              {pendingToday.map((apt, idx) => (
-                <div key={apt.id} className="group/item flex items-center justify-between py-3 px-4 rounded-[1px] bg-card/50 hover:bg-accent/10 hover:border-accent/30 hover-spring hover:scale-[1.02] transition-all duration-300 border border-border/30">
-                  <span className="font-black text-base lg:text-lg text-foreground truncate group-hover/item:text-accent">{apt.studentName}</span>
-                  <span className="text-sm font-bold text-muted-foreground tracking-wide">{apt.time}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Tomorrow */}
-        {tomorrowApts.length > 0 && (
-          <div className="group relative rounded-[2px] bg-gradient-to-r from-accent/5 to-primary/5 backdrop-blur-sm border border-accent/30 shadow-xl p-6 lg:p-8 hover-spring hover:shadow-2xl hover:-translate-y-1.5 transition-all duration-500" data-stagger-index="6">
-            <h3 className="text-sm lg:text-base font-black tracking-wider text-accent uppercase mb-4 flex items-center gap-2 drop-shadow-md">
-              AMANHÃ ({tomorrowApts.length})
-            </h3>
-            <div className="space-y-3">
-              {tomorrowApts.slice(0, 5).map((apt, idx) => (
-                <div key={apt.id} className="group/item flex items-center justify-between py-3 px-4 rounded-[1px] bg-white/20 hover:bg-accent/20 hover-spring hover:scale-[1.02] transition-all duration-300 border border-accent/20 hover:border-accent/40">
-                  <span className="font-black text-base lg:text-lg text-foreground truncate group-hover/item:text-accent transition-colors">{apt.studentName}</span>
-                  <span className="text-sm font-bold text-muted-foreground tracking-wide">{apt.time}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Action section */}
-      <div className="space-y-4 lg:space-y-5" data-stagger-index="7">
-        {/* Notifications */}
-        <div className="group relative rounded-[2px] bg-card/95 backdrop-blur-sm border border-border/50 shadow-lg p-6 lg:p-8 hover-spring hover:shadow-xl hover:-translate-y-1 transition-all duration-400 cursor-pointer" data-stagger-index="8">
-          <button onClick={() => setShowNotifSettings(!showNotifSettings)} className="w-full flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              {currentUser.notifications.enabled ? 
-                <div className="w-12 h-12 rounded-[2px] bg-success/20 flex items-center justify-center shadow-md ring-1 ring-success/40 group-hover:scale-110 hover-spring transition-all duration-300">
-                  <Bell size={22} className="text-success drop-shadow-lg" strokeWidth={2.5} />
-                </div> 
-              : 
-                <div className="w-12 h-12 rounded-[2px] bg-muted/50 flex items-center justify-center shadow-sm ring-1 ring-border/50 group-hover:scale-110 hover-spring transition-all duration-300">
-                  <BellOff size={22} className="text-muted-foreground" strokeWidth={2.5} />
-                </div>
-              }
-              <div>
-                <span className="text-base lg:text-lg font-black tracking-tight text-foreground block group-hover:text-accent transition-colors">Notificações</span>
-                <span className={`inline-block text-xs lg:text-sm font-black px-3 py-1 rounded-[1px] mt-1 ${currentUser.notifications.enabled ? 'bg-success/20 text-success shadow-sm ring-1 ring-success/40' : 'bg-muted/50 text-muted-foreground shadow-sm ring-1 ring-border/50 hover-spring hover:bg-muted hover:scale-[1.05]'}`}>
-                  {currentUser.notifications.enabled ? 'Ativas' : 'Desativadas'}
+                <span
+                  className="text-xs font-semibold px-2 py-1 rounded-lg"
+                  style={
+                    apt.day === "Hoje"
+                      ? {
+                          background: "var(--accent-light)",
+                          color: "var(--accent)",
+                        }
+                      : { background: "var(--n-100)", color: "var(--n-500)" }
+                  }
+                >
+                  {apt.time}
                 </span>
               </div>
-            </div>
-          </button>
+            ))}
+          </div>
+        </div>
 
-          {showNotifSettings && (
-            <div className="mt-6 pt-6 border-t border-border/50 space-y-4 animate-fade-in-up">
-              <label className="flex items-center justify-between group/label py-3 px-4 rounded-[1px] bg-muted/20 hover:bg-muted/40 hover-spring transition-all duration-200 cursor-pointer">
-                <span className="text-base font-black text-foreground group-hover/label:text-accent">Ativar notificações</span>
-                <input type="checkbox" checked={currentUser.notifications.enabled} onChange={e => updateUser({ notifications: { ...currentUser.notifications, enabled: e.target.checked } })} className="w-6 h-6 rounded-[1px] border-2 border-border/50 bg-card focus:ring-2 focus:ring-accent/50 hover:border-accent/60 transition-all duration-200" />
-              </label>
-              <label className="flex items-center justify-between group/label py-3 px-4 rounded-[1px] bg-muted/20 hover:bg-muted/40 hover-spring transition-all duration-200 cursor-pointer">
-                <span className="text-base font-black text-foreground group-hover/label:text-accent">Notificar antes da sessão</span>
-                <input type="checkbox" checked={currentUser.notifications.notifyBefore} onChange={e => updateUser({ notifications: { ...currentUser.notifications, notifyBefore: e.target.checked } })} className="w-6 h-6 rounded-[1px] border-2 border-border/50 bg-card focus:ring-2 focus:ring-accent/50 hover:border-accent/60 transition-all duration-200" />
-              </label>
+        {/* ═══════════════════════════════════════════════
+          ASSINATURA — Estrutura unificada e simples
+          ═══════════════════════════════════════════════ */}
+        <div
+          className="rounded-xl overflow-hidden"
+          style={{ border: "1px solid var(--n-200)", background: "var(--n-0)" }}
+        >
+          {/* Plan Header */}
+          {isPremium ? (
+            <div
+              className="relative overflow-hidden px-4 py-4"
+              style={{
+                background:
+                  "linear-gradient(135deg, var(--accent), var(--accent-dark))",
+              }}
+            >
+              <div
+                className="absolute inset-0 opacity-10"
+                style={{
+                  backgroundImage:
+                    "radial-gradient(circle at 30% 50%, white 1px, transparent 1px)",
+                  backgroundSize: "24px 24px",
+                }}
+              />
+              <div className="relative flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center"
+                    style={{
+                      background: "rgba(255,255,255,0.2)",
+                      backdropFilter: "blur(8px)",
+                    }}
+                  >
+                    <Crown size={20} style={{ color: "#fff" }} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-extrabold text-white">
+                      Plano Premium
+                    </h3>
+                    <p
+                      className="text-xs font-medium"
+                      style={{ color: "rgba(255,255,255,0.8)" }}
+                    >
+                      Todos os recursos ativos
+                    </p>
+                  </div>
+                </div>
+                <div
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold"
+                  style={{ background: "rgba(255,255,255,0.2)", color: "#fff" }}
+                >
+                  <Sparkles size={10} />
+                  Ativo
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div
+              className="px-4 py-4 flex items-center justify-between"
+              style={{
+                background: "var(--n-50)",
+                borderBottom: "1px solid var(--n-200)",
+              }}
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className="p-2 rounded-xl"
+                  style={{ background: "var(--n-200)" }}
+                >
+                  <CreditCard size={18} style={{ color: "var(--n-500)" }} />
+                </div>
+                <div>
+                  <h3
+                    className="text-sm font-extrabold"
+                    style={{ color: "var(--n-900)" }}
+                  >
+                    Plano Gratuito
+                  </h3>
+                  <p className="text-xs" style={{ color: "var(--n-500)" }}>
+                    Recursos limitados
+                  </p>
+                </div>
+              </div>
+              <span
+                className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                style={{ background: "var(--n-200)", color: "var(--n-500)" }}
+              >
+                Free
+              </span>
+            </div>
+          )}
+
+          <div className="p-4 space-y-4">
+            {/* Client usage bar */}
+            <div>
+              <div className="flex justify-between items-center text-sm mb-2">
+                <span
+                  className="flex items-center gap-1.5"
+                  style={{ color: "var(--n-500)" }}
+                >
+                  <Users size={13} />
+                  Clientes ativos
+                </span>
+                <span
+                  className="font-extrabold text-sm"
+                  style={{
+                    color: isPremium ? "var(--accent)" : "var(--n-900)",
+                  }}
+                >
+                  {activeStudentsCount} /{" "}
+                  {isPremium ? "∞" : planLimits.maxStudents}
+                </span>
+              </div>
+              <div
+                className="w-full rounded-full h-2.5"
+                style={{ background: "var(--n-100)" }}
+              >
+                <div
+                  className="h-2.5 rounded-full transition-all duration-700 ease-out"
+                  style={{
+                    width: isPremium
+                      ? "100%"
+                      : `${Math.min((activeStudentsCount / planLimits.maxStudents) * 100, 100)}%`,
+                    background: isPremium
+                      ? "linear-gradient(90deg, var(--accent), var(--accent-dark))"
+                      : activeStudentsCount / planLimits.maxStudents >= 0.8
+                        ? "linear-gradient(90deg, var(--warning), var(--error))"
+                        : "linear-gradient(90deg, var(--accent), var(--accent-dark))",
+                  }}
+                />
+              </div>
+              {!isPremium && activeStudentsCount >= planLimits.maxStudents && (
+                <p
+                  className="text-[11px] mt-1.5 font-medium"
+                  style={{ color: "var(--warning)" }}
+                >
+                  Limite atingido — faça upgrade para adicionar mais
+                </p>
+              )}
+            </div>
+
+            {/* ── 1. Minha Assinatura (datas) ── */}
+            {isPremium && (
+              <div
+                className="rounded-xl"
+                style={{ border: "1px solid var(--n-200)", overflow: "hidden" }}
+              >
+                <div
+                  className="flex items-center gap-3 px-4 py-3"
+                  style={{ borderBottom: "1px solid var(--n-100)" }}
+                >
+                  <Calendar size={15} style={{ color: "var(--accent)" }} />
+                  <span
+                    className="text-sm font-bold"
+                    style={{ color: "var(--n-900)" }}
+                  >
+                    Minha Assinatura
+                  </span>
+                </div>
+                <div
+                  className="grid grid-cols-2 divide-x"
+                  style={{ borderBottom: "1px solid var(--n-100)" }}
+                >
+                  <div className="px-4 py-3">
+                    <div
+                      className="text-[10px] font-semibold uppercase tracking-wider mb-0.5"
+                      style={{ color: "var(--n-400)" }}
+                    >
+                      Início
+                    </div>
+                    <div
+                      className="text-sm font-bold"
+                      style={{ color: "var(--n-900)" }}
+                    >
+                      {fmt(sub.startDate)}
+                    </div>
+                  </div>
+                  <div className="px-4 py-3">
+                    <div
+                      className="text-[10px] font-semibold uppercase tracking-wider mb-0.5"
+                      style={{ color: "var(--n-400)" }}
+                    >
+                      Término
+                    </div>
+                    <div
+                      className="text-sm font-bold"
+                      style={{ color: "var(--n-900)" }}
+                    >
+                      {fmt(sub.endDate)}
+                    </div>
+                  </div>
+                </div>
+                <div className="px-4 py-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Clock size={13} style={{ color: "var(--accent)" }} />
+                    <span className="text-xs" style={{ color: "var(--n-500)" }}>
+                      Tempo restante
+                    </span>
+                  </div>
+                  <span
+                    className="text-sm font-extrabold"
+                    style={{
+                      color:
+                        sub.daysRemaining <= 30
+                          ? "var(--warning)"
+                          : "var(--accent)",
+                    }}
+                  >
+                    {sub.daysRemaining} dias
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* ── 2. Adicionar Dias / Upgrade CTA ── */}
+            {isPremium ? (
+              <button
+                onClick={() => setSubExpanded(!subExpanded)}
+                className="w-full flex items-center justify-between p-3.5 rounded-xl transition-all active:scale-[0.98]"
+                style={{
+                  background: "var(--success-light)",
+                  color: "var(--success)",
+                  border: "1px solid rgba(22,163,74,0.15)",
+                }}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Plus size={18} />
+                  <span className="text-sm font-bold">
+                    Adicionar mais tempo
+                  </span>
+                </div>
+                {subExpanded ? (
+                  <ChevronUp size={18} />
+                ) : (
+                  <ChevronDown size={18} />
+                )}
+              </button>
+            ) : (
+              <button
+                onClick={() => setSubExpanded(!subExpanded)}
+                className="w-full flex items-center justify-between p-3.5 rounded-xl transition-all active:scale-[0.98]"
+                style={{
+                  background:
+                    "linear-gradient(135deg, var(--accent), var(--accent-dark))",
+                  boxShadow: "0 4px 12px rgba(37,99,235,0.25)",
+                }}
+              >
+                <div className="flex items-center gap-2.5">
+                  <div
+                    className="w-8 h-8 rounded-lg flex items-center justify-center"
+                    style={{ background: "rgba(255,255,255,0.2)" }}
+                  >
+                    <Crown size={16} style={{ color: "#fff" }} />
+                  </div>
+                  <div className="text-left">
+                    <div className="text-sm font-bold text-white">
+                      Upgrade para Premium
+                    </div>
+                    <div
+                      className="text-[11px] font-medium"
+                      style={{ color: "rgba(255,255,255,0.8)" }}
+                    >
+                      A partir de R$ 19,99/mês
+                    </div>
+                  </div>
+                </div>
+                {subExpanded ? (
+                  <ChevronUp
+                    size={18}
+                    style={{ color: "rgba(255,255,255,0.7)" }}
+                  />
+                ) : (
+                  <ChevronDown
+                    size={18}
+                    style={{ color: "rgba(255,255,255,0.7)" }}
+                  />
+                )}
+              </button>
+            )}
+
+            {/* ── 3. Planos + Pagamento (expandível) ── */}
+            {subExpanded && (
+              <div className="space-y-4 animate-fade-in-up">
+                {/* Planos disponíveis */}
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <Sparkles size={14} style={{ color: "var(--accent)" }} />
+                    <span
+                      className="text-xs font-bold uppercase tracking-wider"
+                      style={{ color: "var(--n-500)" }}
+                    >
+                      Escolha o plano
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {PLANS.map((plan) => {
+                      const isSelected = selectedPlan === plan.id;
+                      return (
+                        <button
+                          key={plan.id}
+                          onClick={() => setSelectedPlan(plan.id)}
+                          className="w-full rounded-xl p-3.5 text-left transition-all relative overflow-hidden"
+                          style={{
+                            background: isSelected
+                              ? "var(--accent-light)"
+                              : "var(--n-0)",
+                            border: isSelected
+                              ? "2px solid var(--accent)"
+                              : "1.5px solid var(--n-200)",
+                            boxShadow: isSelected
+                              ? "0 0 0 3px rgba(37,99,235,0.08)"
+                              : "none",
+                          }}
+                        >
+                          {plan.recommended && (
+                            <div
+                              className="absolute top-0 right-0 px-2 py-0.5 text-[9px] font-bold rounded-bl-lg"
+                              style={{
+                                background: "var(--accent)",
+                                color: "#fff",
+                              }}
+                            >
+                              MELHOR
+                            </div>
+                          )}
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                              <div
+                                className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-all"
+                                style={{
+                                  border: isSelected
+                                    ? "2px solid var(--accent)"
+                                    : "2px solid var(--n-300)",
+                                  background: isSelected
+                                    ? "var(--accent)"
+                                    : "transparent",
+                                }}
+                              >
+                                {isSelected && (
+                                  <Check
+                                    size={11}
+                                    style={{ color: "#fff" }}
+                                    strokeWidth={3}
+                                  />
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span
+                                    className="text-sm font-bold"
+                                    style={{ color: "var(--n-900)" }}
+                                  >
+                                    {plan.label}
+                                  </span>
+                                  {plan.tag && (
+                                    <span
+                                      className="text-[9px] font-bold px-1.5 py-0.5 rounded-full inline-flex items-center gap-0.5"
+                                      style={{
+                                        background: "var(--success-light)",
+                                        color: "var(--success)",
+                                      }}
+                                    >
+                                      <Tag size={8} /> {plan.tag}
+                                    </span>
+                                  )}
+                                </div>
+                                <div
+                                  className="text-[11px] mt-0.5"
+                                  style={{ color: "var(--n-500)" }}
+                                >
+                                  {plan.perMonth} · {plan.note}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="text-right flex-shrink-0">
+                              <div
+                                className="text-base font-extrabold"
+                                style={{
+                                  color: isSelected
+                                    ? "var(--accent)"
+                                    : "var(--n-900)",
+                                }}
+                              >
+                                {plan.price}
+                              </div>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Forma de pagamento */}
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <CreditCard size={14} style={{ color: "var(--accent)" }} />
+                    <span
+                      className="text-xs font-bold uppercase tracking-wider"
+                      style={{ color: "var(--n-500)" }}
+                    >
+                      Forma de pagamento
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {/* Pix */}
+                    <button
+                      onClick={() => setSelectedPayment("pix")}
+                      className="w-full rounded-xl p-3 text-left transition-all flex items-center gap-3"
+                      style={{
+                        background:
+                          selectedPayment === "pix"
+                            ? "var(--accent-light)"
+                            : "var(--n-0)",
+                        border:
+                          selectedPayment === "pix"
+                            ? "2px solid var(--accent)"
+                            : "1.5px solid var(--n-200)",
+                      }}
+                    >
+                      <div
+                        className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+                        style={{
+                          background:
+                            selectedPayment === "pix"
+                              ? "var(--accent)"
+                              : "var(--n-100)",
+                        }}
+                      >
+                        <QrCode
+                          size={16}
+                          style={{
+                            color:
+                              selectedPayment === "pix"
+                                ? "#fff"
+                                : "var(--n-500)",
+                          }}
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="text-sm font-bold"
+                            style={{ color: "var(--n-900)" }}
+                          >
+                            Pix
+                          </span>
+                          <span
+                            className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+                            style={{
+                              background: "var(--success-light)",
+                              color: "var(--success)",
+                            }}
+                          >
+                            Instantâneo
+                          </span>
+                        </div>
+                        <div
+                          className="text-[11px]"
+                          style={{ color: "var(--n-500)" }}
+                        >
+                          Aprovação imediata · Sem taxas
+                        </div>
+                      </div>
+                      {selectedPayment === "pix" && (
+                        <CheckCircle
+                          size={18}
+                          style={{ color: "var(--accent)" }}
+                          className="flex-shrink-0"
+                        />
+                      )}
+                    </button>
+
+                    {/* Carteira */}
+                    <button
+                      onClick={() => setSelectedPayment("wallet")}
+                      className="w-full rounded-xl p-3 text-left transition-all flex items-center gap-3"
+                      style={{
+                        background:
+                          selectedPayment === "wallet"
+                            ? "var(--accent-light)"
+                            : "var(--n-0)",
+                        border:
+                          selectedPayment === "wallet"
+                            ? "2px solid var(--accent)"
+                            : "1.5px solid var(--n-200)",
+                      }}
+                    >
+                      <div
+                        className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+                        style={{
+                          background:
+                            selectedPayment === "wallet"
+                              ? "var(--accent)"
+                              : "var(--n-100)",
+                        }}
+                      >
+                        <WalletCards
+                          size={16}
+                          style={{
+                            color:
+                              selectedPayment === "wallet"
+                                ? "#fff"
+                                : "var(--n-500)",
+                          }}
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span
+                          className="text-sm font-bold"
+                          style={{ color: "var(--n-900)" }}
+                        >
+                          Carteira FitPro
+                        </span>
+                        <div
+                          className="text-[11px]"
+                          style={{ color: "var(--n-500)" }}
+                        >
+                          Saldo:{" "}
+                          <strong style={{ color: "var(--accent)" }}>
+                            R$ 0,00
+                          </strong>
+                        </div>
+                      </div>
+                      {selectedPayment === "wallet" && (
+                        <CheckCircle
+                          size={18}
+                          style={{ color: "var(--accent)" }}
+                          className="flex-shrink-0"
+                        />
+                      )}
+                    </button>
+
+                    {/* Adicionar cartão */}
+                    <button
+                      onClick={() => setSelectedPayment("card")}
+                      className="w-full rounded-xl p-3 text-left transition-all flex items-center gap-3"
+                      style={{
+                        background:
+                          selectedPayment === "card"
+                            ? "var(--accent-light)"
+                            : "var(--n-0)",
+                        border:
+                          selectedPayment === "card"
+                            ? "2px solid var(--accent)"
+                            : "1.5px dashed var(--n-300)",
+                      }}
+                    >
+                      <div
+                        className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+                        style={{
+                          background:
+                            selectedPayment === "card"
+                              ? "var(--accent)"
+                              : "var(--n-100)",
+                        }}
+                      >
+                        <PlusCircle
+                          size={16}
+                          style={{
+                            color:
+                              selectedPayment === "card"
+                                ? "#fff"
+                                : "var(--n-400)",
+                          }}
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span
+                          className="text-sm font-semibold"
+                          style={{ color: "var(--n-700)" }}
+                        >
+                          Cartão de crédito
+                        </span>
+                        <div
+                          className="text-[11px]"
+                          style={{ color: "var(--n-400)" }}
+                        >
+                          Visa, Mastercard, Elo
+                        </div>
+                      </div>
+                      {selectedPayment === "card" && (
+                        <CheckCircle
+                          size={18}
+                          style={{ color: "var(--accent)" }}
+                          className="flex-shrink-0"
+                        />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* CTA Confirmar */}
+                <button
+                  className="btn btn-primary w-full py-3.5 text-sm font-extrabold"
+                  disabled={!selectedPayment}
+                >
+                  {isPremium ? "Confirmar renovação" : "Assinar Premium agora"}
+                </button>
+                <div className="flex items-center justify-center gap-1.5">
+                  <Shield size={11} style={{ color: "var(--n-400)" }} />
+                  <span
+                    className="text-[10px]"
+                    style={{ color: "var(--n-400)" }}
+                  >
+                    Pagamento 100% seguro · Cancele quando quiser
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Notifications */}
+        <div
+          className="rounded-xl p-4"
+          style={{ background: "var(--n-0)", border: "1px solid var(--n-200)" }}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2.5">
+              <div
+                className="p-2 rounded-lg"
+                style={{ background: "var(--warning-light)" }}
+              >
+                {currentUser.notifications.enabled ? (
+                  <Bell size={18} style={{ color: "var(--warning)" }} />
+                ) : (
+                  <BellOff size={18} style={{ color: "var(--n-400)" }} />
+                )}
+              </div>
+              <h3
+                className="text-base font-bold"
+                style={{ color: "var(--n-900)" }}
+              >
+                Notificações
+              </h3>
+            </div>
+            <button
+              onClick={() => setEditingNotifications(!editingNotifications)}
+              className="text-xs font-semibold transition-colors touch-manipulation px-2 py-1"
+              style={{ color: "var(--accent)" }}
+            >
+              {editingNotifications ? "Cancelar" : "Editar"}
+            </button>
+          </div>
+
+          {!editingNotifications ? (
+            <div className="space-y-2">
+              {[
+                {
+                  label: "Status",
+                  value: currentUser.notifications.enabled
+                    ? "Ativas"
+                    : "Inativas",
+                  highlight: currentUser.notifications.enabled,
+                },
+                ...(currentUser.notifications.enabled
+                  ? [
+                      {
+                        label: "Notificar 15min antes",
+                        value: currentUser.notifications.notifyBefore
+                          ? "Sim"
+                          : "Não",
+                        highlight: currentUser.notifications.notifyBefore,
+                      },
+                      {
+                        label: "Notificar na hora",
+                        value: currentUser.notifications.notifyAtTime
+                          ? "Sim"
+                          : "Não",
+                        highlight: currentUser.notifications.notifyAtTime,
+                      },
+                      {
+                        label: "Listagem diária",
+                        value: currentUser.notifications.dailyListTime,
+                        highlight: true,
+                      },
+                    ]
+                  : []),
+              ].map((item, i) => (
+                <div
+                  key={i}
+                  className="flex items-center justify-between text-sm py-1.5 last:border-0"
+                  style={{ borderBottom: "1px solid var(--n-100)" }}
+                >
+                  <span style={{ color: "var(--n-500)" }}>{item.label}</span>
+                  <span
+                    className="font-semibold"
+                    style={{
+                      color: item.highlight ? "var(--success)" : "var(--n-400)",
+                    }}
+                  >
+                    {item.value}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {[
+                {
+                  label: "Ativar notificações",
+                  field: "enabled" as const,
+                  value: currentUser.notifications.enabled,
+                },
+                ...(currentUser.notifications.enabled
+                  ? [
+                      {
+                        label: "Notificar 15min antes",
+                        field: "notifyBefore" as const,
+                        value: currentUser.notifications.notifyBefore,
+                      },
+                      {
+                        label: "Notificar na hora",
+                        field: "notifyAtTime" as const,
+                        value: currentUser.notifications.notifyAtTime,
+                      },
+                    ]
+                  : []),
+              ].map((item) => (
+                <label
+                  key={item.field}
+                  className="flex items-center justify-between cursor-pointer py-1"
+                >
+                  <span className="text-sm" style={{ color: "var(--n-700)" }}>
+                    {item.label}
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={item.value}
+                    onChange={(e) =>
+                      handleNotificationChange(item.field, e.target.checked)
+                    }
+                    className="w-4 h-4 rounded accent-blue-500"
+                  />
+                </label>
+              ))}
+
+              {currentUser.notifications.enabled && (
+                <div>
+                  <label
+                    className="block text-xs font-semibold uppercase tracking-wider mb-1.5"
+                    style={{ color: "var(--n-600)" }}
+                  >
+                    Listagem diária às
+                  </label>
+                  <input
+                    type="time"
+                    value={currentUser.notifications.dailyListTime}
+                    onChange={(e) =>
+                      handleNotificationChange("dailyListTime", e.target.value)
+                    }
+                    className="input-base"
+                  />
+                </div>
+              )}
+
+              <button
+                onClick={() => setEditingNotifications(false)}
+                className="btn btn-primary w-full py-2.5 text-sm font-bold mt-1"
+              >
+                Salvar
+              </button>
             </div>
           )}
         </div>
 
-        {/* Plan upgrade / downgrade */}
-        {!isPremium ? (
-          <div className="group relative rounded-[2px] bg-gradient-to-r from-warning/10 to-warning/5 backdrop-blur-sm border border-warning/40 shadow-xl p-6 lg:p-8 hover-spring hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 cursor-pointer" data-stagger-index="9">
-            <button onClick={upgradeToPremium} className="w-full flex items-center gap-4">
-              <div className="w-14 h-14 rounded-[2px] bg-warning/30 flex items-center justify-center shadow-lg ring-2 ring-warning/50 group-hover:scale-110 group-hover:rotate-3 hover-spring transition-all duration-400">
-                <Crown size={24} className="text-warning drop-shadow-lg" strokeWidth={2.5} />
-              </div>
-              <div className="text-left flex-1">
-                <span className="text-lg lg:text-xl font-black tracking-tight text-foreground block group-hover:text-warning transition-colors drop-shadow-md">Upgrade para Premium</span>
-                <span className="text-sm lg:text-base font-bold text-muted-foreground/90 tracking-wide mt-1 block">Desbloqueie todos os módulos + suporte prioritário</span>
-              </div>
-            </button>
-          </div>
-        ) : (
-          <div className="group relative rounded-[2px] bg-card/95 backdrop-blur-sm border border-border/50 shadow-lg p-6 lg:p-8 hover-spring hover:shadow-xl hover:-translate-y-1 transition-all duration-400 cursor-pointer" data-stagger-index="9">
-            <button onClick={downgradeToFree} className="w-full flex items-center gap-4 text-muted-foreground">
-              <div className="w-14 h-14 rounded-[2px] bg-muted/50 flex items-center justify-center shadow-sm ring-1 ring-border/50 group-hover:scale-110 hover-spring transition-all duration-300">
-                <Shield size={24} className="text-muted-foreground" strokeWidth={2.5} />
-              </div>
-              <span className="text-lg lg:text-xl font-black tracking-tight group-hover:text-destructive transition-colors">Voltar para plano gratuito</span>
-            </button>
+        {/* Logout */}
+        <button
+          onClick={logout}
+          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all touch-manipulation"
+          style={{ border: "1px solid var(--n-200)", color: "var(--error)" }}
+        >
+          <LogOut size={15} />
+          Sair da conta
+        </button>
+
+        {/* Dev Tools */}
+        {currentUser?.isAdmin && (
+          <div
+            className="rounded-xl p-4"
+            style={{
+              border: "1px dashed var(--n-300)",
+              background: "var(--n-50)",
+            }}
+          >
+            <div className="flex items-center gap-2 mb-3">
+              <FlaskConical size={15} style={{ color: "var(--n-400)" }} />
+              <span
+                className="text-xs font-semibold uppercase tracking-wide"
+                style={{ color: "var(--n-400)" }}
+              >
+                Dev — Simular plano
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => downgradeToFree()}
+                className="flex-1 py-2 rounded-lg text-xs font-semibold transition-all touch-manipulation"
+                style={
+                  !isPremium && !currentUser.isAdmin
+                    ? { background: "var(--accent)", color: "var(--n-0)" }
+                    : {
+                        background: "var(--n-100)",
+                        color: "var(--n-500)",
+                        border: "1px solid var(--n-200)",
+                      }
+                }
+              >
+                Gratuito
+              </button>
+              <button
+                onClick={() => upgradeToPremium()}
+                className="flex-1 py-2 rounded-lg text-xs font-semibold transition-all touch-manipulation"
+                style={
+                  isPremium && !currentUser.isAdmin
+                    ? { background: "#8b5cf6", color: "var(--n-0)" }
+                    : {
+                        background: "var(--n-100)",
+                        color: "var(--n-500)",
+                        border: "1px solid var(--n-200)",
+                      }
+                }
+              >
+                <Crown size={11} className="inline mr-1" />
+                Premium
+              </button>
+              <button
+                onClick={() => updateUser({ isAdmin: !currentUser.isAdmin })}
+                className="flex-1 py-2 rounded-lg text-xs font-semibold transition-all touch-manipulation"
+                style={
+                  currentUser.isAdmin
+                    ? { background: "var(--error)", color: "var(--n-0)" }
+                    : {
+                        background: "var(--n-100)",
+                        color: "var(--n-500)",
+                        border: "1px solid var(--n-200)",
+                      }
+                }
+              >
+                <Shield size={11} className="inline mr-1" />
+                Admin
+              </button>
+            </div>
           </div>
         )}
-
-        {/* Logout */}
-        <div className="group relative rounded-[2px] bg-destructive/5 backdrop-blur-sm border border-destructive/30 shadow-xl p-6 lg:p-8 hover-spring hover:shadow-2xl hover:-translate-y-1.5 transition-all duration-500 cursor-pointer" data-stagger-index="10">
-          <button onClick={logout} className="w-full flex items-center gap-4 text-destructive hover:text-destructive-foreground hover:bg-destructive/10 hover-spring transition-all duration-300">
-            <div className="w-14 h-14 rounded-[2px] bg-destructive/20 flex items-center justify-center shadow-md ring-1 ring-destructive/40 group-hover:scale-110 group-hover:rotate-12 transition-all duration-400 hover-spring">
-              <LogOut size={24} strokeWidth={2.5} className="drop-shadow-lg" />
-            </div>
-            <span className="text-lg lg:text-xl font-black tracking-tight drop-shadow-md">Sair da conta</span>
-          </button>
-        </div>
       </div>
     </div>
   );

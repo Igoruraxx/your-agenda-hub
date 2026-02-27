@@ -2,17 +2,18 @@ export interface Student {
   id: string;
   name: string;
   phone: string;
-  document?: string;
-  parentId?: string;
-  plan: 'monthly' | 'session';
+  plan: 'monthly' | 'session' | 'long_term';
   value: number;
   weeklyFrequency: number;
   selectedDays: string[];
   selectedTimes: string[];
   isConsulting: boolean;
   isActive: boolean;
-  billingDay?: number;
-  shareToken?: string;
+  billingDay?: number | null;
+  shareToken?: string | null; // token único para link público de evolução
+  planDuration?: number | null; // em meses
+  totalValue?: number | null;
+  nextBillingDate?: string | null; // yyyy-mm-dd
 }
 
 export type MuscleGroup =
@@ -83,7 +84,7 @@ export interface Measurement {
 export type UserPlan = 'free' | 'premium';
 
 export type SubscriptionStatus = 'active' | 'expired' | 'cancelled';
-export type PlanOrigin = 'paid' | 'courtesy';
+export type PlanOrigin = 'paid' | 'courtesy' | 'trial';
 
 export interface PlanHistoryEntry {
   id: string;
@@ -149,8 +150,6 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  role?: 'admin_master' | 'cliente_pessoal' | 'sub_cliente';
-  parentProfileId?: string;
   plan: UserPlan;
   isAdmin: boolean;
   notifications: {
@@ -159,4 +158,5 @@ export interface User {
     notifyAtTime: boolean;
     dailyListTime: string;
   };
+  subscription: Subscription;
 }

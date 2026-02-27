@@ -9,9 +9,7 @@ function dbToStudent(row: DbStudent): Student {
     id: row.id,
     name: row.name,
     phone: row.phone,
-    document: row.document ?? undefined,
-    parentId: row.parent_id ?? undefined,
-    plan: row.plan as 'monthly' | 'session',
+    plan: row.plan as 'monthly' | 'session' | 'long_term',
     value: Number(row.value),
     weeklyFrequency: row.weekly_frequency,
     selectedDays: row.selected_days,
@@ -19,7 +17,10 @@ function dbToStudent(row: DbStudent): Student {
     isConsulting: row.is_consulting,
     isActive: row.is_active,
     billingDay: row.billing_day ?? undefined,
-    shareToken: row.share_token ?? undefined,
+    shareToken: (row as any).share_token ?? undefined,
+    planDuration: row.plan_duration ?? undefined,
+    totalValue: row.total_value ? Number(row.total_value) : undefined,
+    nextBillingDate: row.next_billing_date ?? undefined,
   };
 }
 
@@ -36,6 +37,9 @@ function studentToInsert(student: Omit<Student, 'id'>, userId: string): DbStuden
     is_consulting: student.isConsulting,
     is_active: student.isActive,
     billing_day: student.billingDay ?? null,
+    plan_duration: student.planDuration ?? null,
+    total_value: student.totalValue ?? null,
+    next_billing_date: student.nextBillingDate ?? null,
   };
 }
 
@@ -43,8 +47,6 @@ function studentToUpdate(updates: Partial<Student>): DbStudentUpdate {
   const u: DbStudentUpdate = {};
   if (updates.name !== undefined) u.name = updates.name;
   if (updates.phone !== undefined) u.phone = updates.phone;
-  if (updates.document !== undefined) u.document = updates.document ?? null;
-  if (updates.parentId !== undefined) u.parent_id = updates.parentId ?? null;
   if (updates.plan !== undefined) u.plan = updates.plan;
   if (updates.value !== undefined) u.value = updates.value;
   if (updates.weeklyFrequency !== undefined) u.weekly_frequency = updates.weeklyFrequency;
@@ -53,7 +55,9 @@ function studentToUpdate(updates: Partial<Student>): DbStudentUpdate {
   if (updates.isConsulting !== undefined) u.is_consulting = updates.isConsulting;
   if (updates.isActive !== undefined) u.is_active = updates.isActive;
   if (updates.billingDay !== undefined) u.billing_day = updates.billingDay ?? null;
-  if (updates.shareToken !== undefined) u.share_token = updates.shareToken ?? null;
+  if (updates.planDuration !== undefined) u.plan_duration = updates.planDuration ?? null;
+  if (updates.totalValue !== undefined) u.total_value = updates.totalValue ?? null;
+  if (updates.nextBillingDate !== undefined) u.next_billing_date = updates.nextBillingDate ?? null;
   return u;
 }
 
@@ -76,6 +80,7 @@ export function useStudents() {
 
     if (err) {
       setError(err.message);
+      console.error('[useStudents] Erro ao buscar:', err.message);
     } else {
       setStudents((data as DbStudent[]).map(dbToStudent));
     }
@@ -86,33 +91,45 @@ export function useStudents() {
     fetchStudents();
   }, [fetchStudents]);
 
+  // Realtime subscription
   useEffect(() => {
     if (!isAuthenticated || !currentUser.id) return;
 
     const channel = supabase
       .channel('students-changes')
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'students',
-        filter: `user_id=eq.${currentUser.id}`,
-      }, () => {
-        fetchStudents();
-      })
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'students',
+          filter: `user_id=eq.${currentUser.id}`,
+        },
+        () => {
+          fetchStudents();
+        }
+      )
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [currentUser.id, isAuthenticated, fetchStudents]);
 
   const addStudent = useCallback(async (student: Omit<Student, 'id'>) => {
     if (!currentUser.id) return null;
+
     const { data, error: err } = await supabase
       .from('students')
       .insert(studentToInsert(student, currentUser.id))
       .select()
       .single();
 
-    if (err) throw new Error(err.message);
+    if (err) {
+      console.error('[useStudents] Erro ao adicionar:', err.message);
+      throw new Error(err.message);
+    }
+
     const newStudent = dbToStudent(data as DbStudent);
     setStudents(prev => [...prev, newStudent].sort((a, b) => a.name.localeCompare(b.name)));
     return newStudent;
@@ -123,17 +140,34 @@ export function useStudents() {
       .from('students')
       .update(studentToUpdate(updates))
       .eq('id', id);
-    if (err) throw new Error(err.message);
-    setStudents(prev => prev.map(s => (s.id === id ? { ...s, ...updates } : s)));
+
+    if (err) {
+      console.error('[useStudents] Erro ao atualizar:', err.message);
+      throw new Error(err.message);
+    }
+
+    setStudents(prev =>
+      prev.map(s => (s.id === id ? { ...s, ...updates } : s))
+    );
   }, []);
 
   const deleteStudent = useCallback(async (id: string) => {
-    const { error: err } = await supabase.from('students').delete().eq('id', id);
-    if (err) throw new Error(err.message);
+    const { error: err } = await supabase
+      .from('students')
+      .delete()
+      .eq('id', id);
+
+    if (err) {
+      console.error('[useStudents] Erro ao deletar:', err.message);
+      throw new Error(err.message);
+    }
+
     setStudents(prev => prev.filter(s => s.id !== id));
   }, []);
 
+  // Garante que o aluno tem share_token e retorna-o
   const generateShareToken = useCallback(async (studentId: string): Promise<string> => {
+    // Primeiro busca o token existente
     const { data: existing } = await supabase
       .from('students')
       .select('share_token')
@@ -144,6 +178,7 @@ export function useStudents() {
       return (existing as any).share_token as string;
     }
 
+    // Gera um UUID aleatório se não existir
     const newToken = crypto.randomUUID();
     const { error: err } = await supabase
       .from('students')
@@ -151,9 +186,19 @@ export function useStudents() {
       .eq('id', studentId);
 
     if (err) throw new Error(err.message);
+
     setStudents(prev => prev.map(s => s.id === studentId ? { ...s, shareToken: newToken } : s));
     return newToken;
   }, []);
 
-  return { students, loading, error, addStudent, updateStudent, deleteStudent, generateShareToken, refetch: fetchStudents };
+  return {
+    students,
+    loading,
+    error,
+    addStudent,
+    updateStudent,
+    deleteStudent,
+    generateShareToken,
+    refetch: fetchStudents,
+  };
 }

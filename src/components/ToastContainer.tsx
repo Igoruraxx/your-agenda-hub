@@ -1,5 +1,5 @@
 import React from 'react';
-import FitToast from './FitToast';
+import Toast from './Toast';
 
 interface ToastContainerProps {
   toasts: Array<{
@@ -17,7 +17,7 @@ const ToastContainer: React.FC<ToastContainerProps> = ({ toasts, onClose }) => {
     <div className="fixed top-3 right-3 sm:top-4 sm:right-4 z-[100] flex flex-col gap-2 items-end pointer-events-none">
       {visible.map((toast) => (
         <div key={toast.id} className="pointer-events-auto">
-          <FitToast
+          <Toast
             id={toast.id}
             type={toast.type}
             message={toast.message}

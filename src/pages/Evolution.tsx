@@ -1,555 +1,847 @@
-import React, { useState, useRef, useMemo } from 'react';
-import { Camera, Plus, TrendingUp, ChevronDown, X, User, CalendarDays, Pencil, BarChart3, ArrowUp, ArrowDown, Minus, Upload } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Camera, Upload, Plus, TrendingUp, TrendingDown, ChevronDown, X, User, CalendarDays, CheckCircle2, Pencil } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import FeatureGate from '../components/FeatureGate';
 import { usePermissions } from '../hooks/usePermissions';
 import { useStudents } from '../hooks/useStudents';
 import { useEvolution } from '../hooks/useEvolution';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import { Bioimpedance } from '../types';
+import { useImageUpload } from '../hooks/useImageUpload';
 
-function DeltaIndicator({ current, previous, inverse = false }: { current: number; previous: number; inverse?: boolean }) {
-  const diff = current - previous;
-  if (Math.abs(diff) < 0.01) return <Minus size={10} className="text-muted-foreground" />;
-  const isGood = inverse ? diff < 0 : diff > 0;
-  return (
-    <span className={`flex items-center gap-0.5 text-[10px] font-bold ${isGood ? 'text-success' : 'text-destructive'}`}>
-      {diff > 0 ? <ArrowUp size={10} /> : <ArrowDown size={10} />}
-      {Math.abs(diff).toFixed(1)}
-    </span>
-  );
-}
-
-const Evolution: React.FC = () => {
-  const { canAccessEvolution } = usePermissions();
-  const { students } = useStudents();
-  const { photos, bioimpedance, measurements, addPhoto, addBioimpedance, addMeasurement, deletePhoto, deleteBioimpedance, deleteMeasurement } = useEvolution();
-  const [activeTab, setActiveTab] = useState<'photos' | 'bioimpedance' | 'measurements' | 'charts'>('photos');
+const EvolutionContent: React.FC = () => {
+  const { students: STUDENTS_LIST } = useStudents();
+  const { photos: evoPhotos, bioimpedance: evoBio, measurements: evoMeasurements, addPhoto: addEvoPhoto, addBioimpedance, addMeasurement, updateBioimpedance, updateMeasurement, deletePhoto, deleteBioimpedance, deleteMeasurement } = useEvolution();
+  const [activeTab, setActiveTab] = useState<'photos' | 'bioimpedance' | 'measurements'>('photos');
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
   const [showStudentDropdown, setShowStudentDropdown] = useState(false);
   const [showPhotoModal, setShowPhotoModal] = useState(false);
-  const [showBioModal, setShowBioModal] = useState(false);
-  const [showMeasModal, setShowMeasModal] = useState(false);
   const [photoDate, setPhotoDate] = useState('');
-  const [saving, setSaving] = useState(false);
+  const [bioImageViewer, setBioImageViewer] = useState<string | null>(null);
 
   const frontRef = useRef<HTMLInputElement>(null);
   const sideRef = useRef<HTMLInputElement>(null);
   const backRef = useRef<HTMLInputElement>(null);
-  const bioImageRef = useRef<HTMLInputElement>(null);
+  const bioFileRef = useRef<HTMLInputElement>(null);
 
-  const [frontFile, setFrontFile] = useState<File | null>(null);
-  const [sideFile, setSideFile] = useState<File | null>(null);
-  const [backFile, setBackFile] = useState<File | null>(null);
-  const [bioImageFile, setBioImageFile] = useState<File | null>(null);
+  const [showBioModal, setShowBioModal] = useState(false);
+  const [showMeasModal, setShowMeasModal] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editingBioId, setEditingBioId] = useState<string | null>(null);
+  const [editingMeasId, setEditingMeasId] = useState<string | null>(null);
 
-  const [bioDate, setBioDate] = useState('');
-  const [bioData, setBioData] = useState({ weight: 0, bodyFatPct: 0, bodyFatKg: 0, muscleMass: 0, visceralFat: 0, leanMass: 0, musclePct: 0 });
-  const [measDate, setMeasDate] = useState('');
+  // Hooks de upload — cada um gerencia File + previewUrl + cleanup
+  const frontUpload  = useImageUpload();
+  const sideUpload   = useImageUpload();
+  const backUpload   = useImageUpload();
+  const bioUpload    = useImageUpload();
+
+  const [bioDate, setBioDate] = useState(new Date().toISOString().split('T')[0]);
+  const [bioData, setBioData] = useState({
+    weight: 0,
+    bodyFatPct: 0,
+    bodyFatKg: 0,
+    muscleMass: 0,
+    visceralFat: 0,
+    leanMass: 0,
+    musclePct: 0,
+  });
+
+  // Cálculo automático de % Massa Muscular
+  useEffect(() => {
+    const weight = Number(bioData.weight) || 0;
+    const muscle = Number(bioData.muscleMass) || 0;
+    if (weight > 0) {
+      const pct = Number(((muscle / weight) * 100).toFixed(1));
+      if (bioData.musclePct !== pct) {
+        setBioData(prev => ({ ...prev, musclePct: pct }));
+      }
+    } else if (bioData.musclePct !== 0) {
+      setBioData(prev => ({ ...prev, musclePct: 0 }));
+    }
+  }, [bioData.weight, bioData.muscleMass, bioData.musclePct]);
+
+  const [measDate, setMeasDate] = useState(new Date().toISOString().split('T')[0]);
   const [measWeight, setMeasWeight] = useState(0);
   const [measHeight, setMeasHeight] = useState(0);
-  const [measData, setMeasData] = useState({ chest: 0, waist: 0, hip: 0, arm: 0, thigh: 0, calf: 0 });
-  const [sfData, setSfData] = useState({ triceps: 0, biceps: 0, subscapular: 0, suprailiac: 0, abdominal: 0 });
+  const [measValues, setMeasValues] = useState({
+    chest: 0, waist: 0, hip: 0, arm: 0, thigh: 0, calf: 0
+  });
+  const [skinfolds, setSkinfolds] = useState({
+    triceps: 0, biceps: 0, subscapular: 0, suprailiac: 0, abdominal: 0
+  });
 
-  const selectedStudent = students.find(s => s.id === selectedStudentId);
-  const filteredPhotos = selectedStudentId ? photos.filter(p => p.studentId === selectedStudentId) : photos;
-  const filteredBio = selectedStudentId ? bioimpedance.filter(b => b.studentId === selectedStudentId) : bioimpedance;
-  const filteredMeas = selectedStudentId ? measurements.filter(m => m.studentId === selectedStudentId) : measurements;
+  const selectedStudent = STUDENTS_LIST.find(s => s.id === selectedStudentId);
 
-  // Last bio for comparison
-  const lastBio: Bioimpedance | undefined = filteredBio.length > 0 ? filteredBio[filteredBio.length - 1] : undefined;
+  const photos = evoPhotos;
+  const bioimpedanceData = evoBio;
+  const measurements = evoMeasurements;
 
-  // Chart data
-  const bioChartData = useMemo(() => {
-    return filteredBio.map(b => ({
-      date: format(b.date, 'dd/MM'),
-      Peso: b.data.weight,
-      'Gordura %': b.data.bodyFatPct,
-      'Massa Muscular': b.data.muscleMass,
-      'Massa Magra': b.data.leanMass,
+  const filteredPhotos = selectedStudentId ? photos.filter(p => p.studentId === selectedStudentId) : [];
+  const filteredBio = selectedStudentId ? bioimpedanceData.filter(b => b.studentId === selectedStudentId) : [];
+  const filteredMeasurements = selectedStudentId ? measurements.filter(m => m.studentId === selectedStudentId) : [];
+  
+  const weightData = filteredMeasurements
+    .filter(m => m.weight > 0)
+    .map(m => ({ 
+      date: m.date.toLocaleDateString('pt-BR', { month: 'short' }), 
+      peso: m.weight 
     }));
-  }, [filteredBio]);
+  
+  
+  const measurementsChartData = filteredMeasurements
+    .filter(m => (m.measurements.waist > 0 || m.measurements.hip > 0 || m.measurements.chest > 0))
+    .map(m => ({ 
+      date: m.date.toLocaleDateString('pt-BR', { month: 'short' }), 
+      cintura: m.measurements.waist > 0 ? m.measurements.waist : null, 
+      quadril: m.measurements.hip > 0 ? m.measurements.hip : null, 
+      peitoral: m.measurements.chest > 0 ? m.measurements.chest : null 
+    }));
 
-  // Written evolution summary
-  const evolutionSummary = useMemo(() => {
-    if (filteredBio.length < 2) return null;
-    const first = filteredBio[0];
-    const last = filteredBio[filteredBio.length - 1];
-    const weightDiff = last.data.weight - first.data.weight;
-    const fatDiff = last.data.bodyFatKg - first.data.bodyFatKg;
-    const muscleDiff = last.data.muscleMass - first.data.muscleMass;
-    return { weightDiff, fatDiff, muscleDiff, sessions: filteredBio.length };
-  }, [filteredBio]);
 
-  const handleSavePhoto = async () => {
-    if (!selectedStudentId || !photoDate) return;
+
+  const handleAddPhoto = async () => {
+    if (!photoDate || !selectedStudentId) return;
+    if (!frontUpload.file && !sideUpload.file && !backUpload.file) {
+      alert('Selecione ao menos uma foto antes de salvar.');
+      return;
+    }
     setSaving(true);
     try {
-      await addPhoto({ studentId: selectedStudentId, date: photoDate, frontFile: frontFile || undefined, sideFile: sideFile || undefined, backFile: backFile || undefined });
+      await addEvoPhoto({
+        studentId: selectedStudentId,
+        date: photoDate,
+        frontFile: frontUpload.file || undefined,
+        sideFile: sideUpload.file || undefined,
+        backFile: backUpload.file || undefined,
+      });
       setShowPhotoModal(false);
-      setFrontFile(null); setSideFile(null); setBackFile(null); setPhotoDate('');
-    } catch {} finally { setSaving(false); }
+      setPhotoDate('');
+      frontUpload.clear();
+      sideUpload.clear();
+      backUpload.clear();
+    } catch (error: any) {
+      console.error('Erro ao salvar fotos:', error);
+      alert(`Erro ao salvar fotos: ${error?.message || 'Tente novamente.'}`);
+    } finally { setSaving(false); }
   };
 
-  const handleSaveBio = async () => {
-    if (!selectedStudentId || !bioDate) return;
+  const closePhotoModal = () => {
+    setShowPhotoModal(false);
+    setPhotoDate('');
+    frontUpload.clear();
+    sideUpload.clear();
+    backUpload.clear();
+  };
+
+  const handleAddBio = async () => {
+    if (!bioDate || !selectedStudentId) return;
     setSaving(true);
+    // Garantia final do cálculo antes de salvar
+    const weight = Number(bioData.weight) || 0;
+    const muscle = Number(bioData.muscleMass) || 0;
+    const finalData = { ...bioData };
+    if (weight > 0) {
+      finalData.musclePct = Number(((muscle / weight) * 100).toFixed(1));
+    }
+
     try {
-      await addBioimpedance({ studentId: selectedStudentId, date: bioDate, data: bioData, imageFile: bioImageFile || undefined });
+      if (editingBioId) {
+        await updateBioimpedance(editingBioId, {
+          date: bioDate,
+          imageFile: bioUpload.file ?? (bioUpload.previewUrl ? undefined : null),
+          data: finalData,
+        });
+      } else {
+        await addBioimpedance({
+          studentId: selectedStudentId,
+          date: bioDate,
+          imageFile: bioUpload.file || undefined,
+          data: finalData,
+        });
+      }
       setShowBioModal(false);
-      setBioData({ weight: 0, bodyFatPct: 0, bodyFatKg: 0, muscleMass: 0, visceralFat: 0, leanMass: 0, musclePct: 0 });
-      setBioImageFile(null);
-    } catch {} finally { setSaving(false); }
+      setEditingBioId(null);
+      bioUpload.clear();
+    } catch (error: any) {
+      console.error('Erro ao salvar bio:', error);
+      alert(`Erro ao salvar: ${error?.message || 'Tente novamente.'}`);
+    } finally { setSaving(false); }
   };
 
-  const handleSaveMeas = async () => {
-    if (!selectedStudentId || !measDate) return;
+  const openEditBio = (bio: typeof evoBio[0]) => {
+    setEditingBioId(bio.id);
+    setBioDate(bio.date.toISOString().split('T')[0]);
+    
+    // Forçar cálculo ao abrir para garantir que dados antigos sejam corrigidos na visualização
+    const data = { ...bio.data };
+    if (data.weight > 0) {
+      data.musclePct = Number(((data.muscleMass / data.weight) * 100).toFixed(1));
+    }
+    setBioData(data);
+    
+    bioUpload.clear();
+    setShowBioModal(true);
+  };
+
+  const closeBioModal = () => {
+    setShowBioModal(false);
+    setEditingBioId(null);
+    bioUpload.clear();
+    setBioData({ weight: 0, bodyFatPct: 0, bodyFatKg: 0, muscleMass: 0, visceralFat: 0, leanMass: 0, musclePct: 0 });
+    setBioDate(new Date().toISOString().split('T')[0]);
+  };
+
+  const handleAddMeas = async () => {
+    if (!measDate || !selectedStudentId) return;
     setSaving(true);
     try {
-      await addMeasurement({ studentId: selectedStudentId, date: measDate, weight: measWeight, height: measHeight, measurements: measData, skinfolds: sfData });
+      if (editingMeasId) {
+        await updateMeasurement(editingMeasId, {
+          date: measDate,
+          weight: measWeight,
+          height: measHeight,
+          measurements: measValues,
+          skinfolds,
+        });
+      } else {
+        await addMeasurement({
+          studentId: selectedStudentId,
+          date: measDate,
+          weight: measWeight,
+          height: measHeight,
+          measurements: measValues,
+          skinfolds,
+        });
+      }
       setShowMeasModal(false);
-    } catch {} finally { setSaving(false); }
+      setEditingMeasId(null);
+    } catch (error) {
+      console.error('Erro ao salvar medidas:', error);
+      alert('Erro ao salvar.');
+    } finally { setSaving(false); }
+  };
+
+  const openEditMeas = (m: typeof evoMeasurements[0]) => {
+    setEditingMeasId(m.id);
+    setMeasDate(m.date.toISOString().split('T')[0]);
+    setMeasWeight(m.weight);
+    setMeasHeight(m.height);
+    setMeasValues({ ...m.measurements });
+    setSkinfolds({ ...m.skinfolds });
+    setShowMeasModal(true);
+  };
+
+  const closeMeasModal = () => {
+    setShowMeasModal(false);
+    setEditingMeasId(null);
+    setMeasWeight(0); setMeasHeight(0);
+    setMeasValues({ chest: 0, waist: 0, hip: 0, arm: 0, thigh: 0, calf: 0 });
+    setSkinfolds({ triceps: 0, biceps: 0, subscapular: 0, suprailiac: 0, abdominal: 0 });
+    setMeasDate(new Date().toISOString().split('T')[0]);
   };
 
   const tabs = [
     { id: 'photos' as const, label: 'Fotos', icon: Camera },
-    { id: 'bioimpedance' as const, label: 'Bio', icon: TrendingUp },
-    { id: 'measurements' as const, label: 'Medidas', icon: Pencil },
-    { id: 'charts' as const, label: 'Gráficos', icon: BarChart3 },
+    { id: 'bioimpedance' as const, label: 'Bioimpedancia', icon: Upload },
+    { id: 'measurements' as const, label: 'Medidas', icon: TrendingUp },
   ];
 
   return (
-    <FeatureGate allowed={canAccessEvolution} title="Módulo de Evolução" description="Acompanhe a evolução dos seus alunos com fotos, bioimpedância e medidas corporais.">
-      <div className="px-4 py-4">
-        {/* Student selector */}
-        <div className="relative group mb-8 lg:mb-12" data-stagger-index="1">
-          <div className="rounded-[2px] bg-gradient-to-br from-card/95 via-card to-card/90 backdrop-blur-xl border border-border/50 shadow-2xl p-6 lg:p-8 hover-spring hover:shadow-3xl hover:-translate-y-2 transition-all duration-700 overflow-hidden hover:z-20">
-            <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-transparent to-accent/5 -skew-x-3 -translate-x-4 group-hover:translate-x-0 transition-transform duration-1000" />
-            <button onClick={() => setShowStudentDropdown(!showStudentDropdown)} className="relative flex items-center justify-between w-full text-left">
-              <div className="flex items-center gap-4 lg:gap-5">
-                <div className="w-14 h-14 lg:w-16 lg:h-16 rounded-[2px] bg-gradient-to-br from-primary via-accent to-primary flex items-center justify-center shadow-xl ring-2 ring-primary/30 group-hover:scale-110 group-hover:ring-accent/50 transition-all duration-500 hover-spring">
-                  <User size={20} className="text-primary-foreground drop-shadow-md" strokeWidth={2.5} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <span className="text-xl lg:text-2xl font-black tracking-[-0.04em] text-foreground leading-tight group-hover:text-accent transition-colors duration-500 drop-shadow-lg block">{selectedStudent?.name || 'Todos os alunos'}</span>
-                  <span className="text-xs lg:text-sm font-bold tracking-wider text-muted-foreground/90 uppercase mt-1 block">Selector</span>
-                </div>
-              </div>
-              <ChevronDown size={20} className="text-muted-foreground group-hover:text-accent transition-colors duration-300 shrink-0 ml-4" strokeWidth={2.5} />
-            </button>
-            {showStudentDropdown && (
-              <div className="absolute top-full left-0 right-0 mt-2 rounded-[2px] bg-card/98 backdrop-blur-2xl border border-border/60 shadow-2xl z-30 max-h-64 overflow-hidden lg:-left-4 lg:w-[105%] lg:-translate-x-2 lg:group-hover:translate-x-0 transition-all duration-500 hover-spring">
-                <div className="py-2 px-4 border-b border-border/50">
-                  <button onClick={() => { setSelectedStudentId(''); setShowStudentDropdown(false); }} className="w-full text-left px-3 py-3 text-base font-black tracking-tight text-muted-foreground hover:text-accent hover:bg-accent/10 hover-spring rounded-[1px] transition-all duration-300 block truncate">Todos os alunos</button>
-                </div>
-                <div className="max-h-48 overflow-y-auto">
-                  {students.map((s, i) => (
-                    <button key={s.id} data-stagger-index={i+2} onClick={() => { setSelectedStudentId(s.id); setShowStudentDropdown(false); }} className="w-full text-left px-3 py-3 text-lg font-black tracking-[-0.02em] text-foreground hover:text-accent hover:bg-gradient-to-r hover:from-accent/10 hover:to-primary/5 hover-spring rounded-[1px] border-l-4 border-transparent hover:border-accent transition-all duration-300 block truncate hover:-translate-x-1 hover:shadow-md">
-                      {s.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
+    <div className="animate-fade-in-up">
+      {/* Header */}
+      <div className="page-header mb-0">
+        <h1 className="text-lg font-extrabold tracking-tight" style={{color:'var(--n-900)'}}>Evolução</h1>
+        <p className="text-xs mt-0.5" style={{color:'var(--n-500)'}}>Acompanhe o progresso dos seus clientes</p>
+      </div>
+
+      <div className="p-4 sm:p-5">
+      <div className="relative mb-4">
+        <button onClick={() => setShowStudentDropdown(v => !v)} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all touch-manipulation"
+          style={selectedStudent ? {background:'var(--accent-light)',border:'1.5px solid var(--accent)'} : {background:'var(--n-0)',border:'1px solid var(--n-200)'}}>
+          <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+            style={selectedStudent ? {background:'var(--accent)',color:'var(--n-0)'} : {background:'var(--n-100)',color:'var(--n-400)'}}>
+            <User size={16} />
+          </div>
+          <div className="flex-1 text-left min-w-0">
+            {selectedStudent ? (
+              <><div className="text-sm font-bold truncate" style={{color:'var(--n-900)'}}>{selectedStudent.name}</div><div className="text-xs" style={{color:'var(--accent)'}}>Cliente selecionado</div></>
+            ) : (
+              <div className="text-sm" style={{color:'var(--n-400)'}}>Selecionar cliente...</div>
             )}
           </div>
-        </div>
-
-        {/* Tabs assimétricos */}
-        <div className="relative mb-8 lg:mb-12" data-stagger-index="2">
-          <div className="flex flex-col lg:flex-row gap-2 lg:gap-3 items-start lg:items-end -ml-2 lg:-ml-4 [&>*]:hover:z-20">
-            {tabs.map((tab, i) => (
-              <button 
-                key={tab.id} 
-                data-stagger-index={i+3}
-                onClick={() => setActiveTab(tab.id)}
-                className={`group relative rounded-[2px] bg-card/95 backdrop-blur-sm border border-border/50 shadow-md hover:shadow-xl p-4 lg:p-5 hover-spring transition-all duration-500 font-black tracking-[-0.03em] text-sm lg:text-base uppercase leading-tight hover:-translate-y-1 hover:scale-[1.02] hover:border-accent/70 ${activeTab === tab.id ? 'bg-gradient-to-br from-primary via-accent to-primary shadow-2xl border-primary/80 text-primary-foreground ring-2 ring-primary/40 z-30 scale-[1.05] translate-y-[-4px]' : 'text-muted-foreground hover:text-accent hover:bg-accent/20'} ${i === 0 ? 'w-20 lg:w-24' : i === 1 ? 'w-28 lg:w-32 flex-1 lg:-translate-x-2 lg:mt-3' : i === 2 ? 'w-24 lg:w-28 lg:translate-x-4 lg:-mt-2' : 'w-22 lg:w-26 lg:translate-x-8'}`}
-              >
-                <div className="flex items-center justify-center lg:justify-start gap-2 lg:gap-3">
-                  <tab.icon size={18} strokeWidth={3} className={`group-hover:scale-110 transition-transform duration-300 ${activeTab === tab.id ? 'stroke-primary-foreground' : ''}`} />
-                  <span className="hidden lg:block whitespace-nowrap">{tab.label}</span>
-                </div>
-                {activeTab === tab.id && (
-                  <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-3/4 h-1 bg-gradient-to-r from-primary to-accent rounded-full shadow-lg" />
-                )}
+          <ChevronDown size={16} className={`transition-transform flex-shrink-0 ${showStudentDropdown ? 'rotate-180' : ''}`} style={{color:'var(--n-400)'}} />
+        </button>
+        {showStudentDropdown && (
+          <div className="absolute top-full left-0 right-0 mt-1 rounded-xl z-20 overflow-hidden" style={{background:'var(--n-0)',border:'1px solid var(--n-200)',boxShadow:'var(--sh-lg)'}}>
+            {STUDENTS_LIST.map(s => (
+              <button key={s.id} onClick={() => { setSelectedStudentId(s.id); setShowStudentDropdown(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-left transition-colors touch-manipulation hover:bg-black/[0.02]" style={s.id === selectedStudentId ? {background:'var(--accent-light)'} : {}}>
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{background:'var(--accent)',color:'var(--n-0)'}}><span className="text-xs font-bold">{s.name.charAt(0)}</span></div>
+                <span className="text-sm font-semibold" style={{color: s.id === selectedStudentId ? 'var(--accent)' : 'var(--n-900)'}}>{s.name}</span>
               </button>
             ))}
           </div>
-        </div>
-
-        {/* Add button */}
-        {selectedStudentId && activeTab !== 'charts' && (
-          <div className="group relative mb-8 lg:mb-12" data-stagger-index="6">
-            <button onClick={() => { if (activeTab === 'photos') setShowPhotoModal(true); else if (activeTab === 'bioimpedance') setShowBioModal(true); else setShowMeasModal(true); }}
-              className="rounded-[2px] bg-gradient-to-br from-primary via-accent to-primary border border-primary/50 shadow-2xl hover:shadow-3xl hover-spring hover:-translate-y-2 hover:scale-[1.02] p-6 lg:p-8 transition-all duration-700 font-black tracking-[-0.03em] text-lg lg:text-xl uppercase text-primary-foreground w-full relative overflow-hidden z-10 hover:z-20">
-              <div className="absolute inset-0 bg-gradient-to-r from-accent/20 to-primary/20 -skew-x-6 -translate-x-full group-hover:translate-x-0 transition-transform duration-1000" />
-              <div className="relative flex items-center justify-center gap-3">
-                <Plus size={24} strokeWidth={3} className="drop-shadow-lg" />
-                <span>Adicionar {activeTab === 'photos' ? 'Fotos' : activeTab === 'bioimpedance' ? 'Bioimpedância' : 'Medidas'}</span>
-              </div>
-            </button>
-          </div>
-        )}
-
-        {/* Photos tab */}
-        {activeTab === 'photos' && (
-          <div className="space-y-3">
-            {filteredPhotos.length === 0 ? (
-              <p className="text-center text-sm text-muted-foreground py-10">Nenhuma foto de evolução</p>
-            ) : filteredPhotos.map(p => (
-              <div key={p.id} className="card-surface p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-muted-foreground flex items-center gap-1"><CalendarDays size={12} />{format(p.date, "dd/MM/yyyy", { locale: ptBR })}</span>
-                  <button onClick={() => deletePhoto(p.id)} className="text-destructive"><X size={16} /></button>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {[{ url: p.front, label: 'Frente' }, { url: p.side, label: 'Lado' }, { url: p.back, label: 'Costas' }].map(({ url, label }) => (
-                    <div key={label} className="aspect-[3/4] bg-muted rounded-lg overflow-hidden">
-                      {url ? <img src={url} alt={label} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground">{label}</div>}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Bioimpedance tab */}
-        {activeTab === 'bioimpedance' && (
-          <div className="space-y-5 lg:space-y-6 pt-2">
-            {filteredBio.length === 0 ? (
-              <div className="relative h-64 lg:h-72 flex flex-col items-center justify-center rounded-[2px] bg-gradient-to-br from-muted/60 to-card/90 backdrop-blur-xl border border-border/40 shadow-2xl" data-stagger-index="15">
-                <TrendingUp size={56} strokeWidth={1.5} className="mx-auto mb-6 text-muted-foreground/50 rotate-12" />
-                <p className="text-xl lg:text-2xl font-black tracking-[-0.05em] text-muted-foreground/80 text-center leading-tight drop-shadow-lg">Nenhum registro de bioimpedância</p>
-              </div>
-            ) : filteredBio.slice().reverse().map((b, idx) => {
-              const prevBio = idx < filteredBio.length - 1 ? filteredBio[filteredBio.length - 2 - idx] : undefined;
-              return (
-                <div key={b.id} data-stagger-index={idx+16} className="group relative rounded-[2px] bg-card/95 backdrop-blur-sm border border-border/50 shadow-xl hover:shadow-3xl p-6 lg:p-8 hover-spring transition-all duration-700 z-10 hover:z-30 overflow-hidden [&:nth-child(odd)]:translate-y-4 lg:[&:nth-child(odd)]:-translate-x-6 [&:nth-child(even)]:-translate-x-3">
-                  <div className="absolute top-4 right-4 z-40">
-                    <button onClick={() => deleteBioimpedance(b.id)} className="p-2.5 rounded-[2px] bg-destructive/15 hover:bg-destructive/25 text-destructive hover-spring shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.1] hover:rotate-[-5deg]">
-                      <X size={20} strokeWidth={2.5} />
-                    </button>
-                  </div>
-                  <div className="flex items-start gap-4 mb-6 lg:mb-8">
-                    <div className="w-14 h-14 lg:w-16 lg:h-16 rounded-[2px] bg-gradient-to-br from-warning/30 to-primary/40 flex items-center justify-center shadow-2xl ring-2 ring-warning/40 shrink-0 mt-1 -translate-y-1">
-                      <TrendingUp size={22} strokeWidth={3} className="text-warning drop-shadow-lg" />
-                    </div>
-                    <div className="flex-1 pt-1">
-                      <p className="text-xl lg:text-2xl font-black tracking-[-0.04em] text-foreground drop-shadow-2xl group-hover:text-accent transition-colors duration-500 leading-tight">{format(b.date, "dd/MM/yyyy")}</p>
-                    </div>
-                  </div>
-                  {b.image && (
-                    <div className="mb-6 lg:mb-10 rounded-[2px] overflow-hidden bg-muted/70 backdrop-blur-md shadow-2xl group/image hover-spring transition-all duration-700 cursor-pointer relative z-20 -mx-1 lg:-mx-2 h-32 lg:h-40">
-                      <img src={b.image} alt="Bioimpedância" className="w-full h-full object-contain group-hover/image:scale-105 group-hover/image:rotate-1 transition-transform duration-700 will-change-transform" />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent opacity-0 group-hover/image:opacity-100 transition-opacity duration-500 flex items-end p-4">
-                        <span className="font-black text-primary-foreground text-base tracking-tight drop-shadow-2xl">Relatório Visual</span>
-                      </div>
-                    </div>
-                  )}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-3 lg:gap-4 text-sm lg:text-base pt-2">
-                    {[
-                      { label: 'Peso', value: `${b.data.weight}kg`, key: 'weight', inverse: false, col: 'lg:col-span-1' },
-                      { label: 'Gordura %', value: `${b.data.bodyFatPct}%`, key: 'bodyFatPct', inverse: true, col: 'lg:col-span-1 xl:col-span-2' },
-                      { label: 'Massa Muscular', value: `${b.data.muscleMass}kg`, key: 'muscleMass', inverse: false, col: 'lg:col-span-1' },
-                      { label: 'Gord. Visceral', value: `${b.data.visceralFat}`, key: 'visceralFat', inverse: true, col: 'xl:col-span-1' },
-                    ].map((item, i) => (
-                      <div key={item.key} data-stagger-index={20+i} className={`group/metric relative rounded-[2px] bg-gradient-to-br from-card/80 via-muted to-card/70 backdrop-blur-sm border border-border/40 shadow-lg hover:shadow-2xl p-4 lg:p-5 hover-spring hover:-translate-y-1.5 hover:scale-[1.02] transition-all duration-500 z-10 hover:z-20 ${item.col} ${i%2 ? '-translate-x-2 lg:-translate-x-4' : 'translate-x-1 lg:translate-x-3 translate-y-1'}`}>
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1 min-w-0">
-                            <span className="text-xs lg:text-sm font-bold tracking-wider uppercase text-muted-foreground/90 block mb-1">{item.label}:</span>
-                            <strong className="text-2xl lg:text-3xl font-black tracking-[-0.05em] text-foreground block drop-shadow-xl group-hover/metric:text-accent transition-colors duration-400">{item.value}</strong>
-                          </div>
-                          {prevBio && <DeltaIndicator current={b.data[item.key as keyof Bioimpedance['data']]} previous={prevBio.data[item.key as keyof Bioimpedance['data']]} inverse={item.inverse} />}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Measurements tab */}
-        {activeTab === 'measurements' && (
-          <div className="space-y-5 lg:space-y-6 pt-2">
-            {filteredMeas.length === 0 ? (
-              <div className="relative h-64 lg:h-72 flex flex-col items-center justify-center rounded-[2px] bg-gradient-to-br from-muted/60 to-card/90 backdrop-blur-xl border border-border/40 shadow-2xl" data-stagger-index="25">
-                <Pencil size={56} strokeWidth={1.5} className="mx-auto mb-6 text-muted-foreground/50 -rotate-6" />
-                <p className="text-xl lg:text-2xl font-black tracking-[-0.05em] text-muted-foreground/80 text-center leading-tight drop-shadow-lg">Nenhuma medida registrada</p>
-              </div>
-            ) : filteredMeas.map((m, idx) => (
-              <div key={m.id} data-stagger-index={idx+26} className="group relative rounded-[2px] bg-card/95 backdrop-blur-sm border border-border/50 shadow-xl hover:shadow-3xl p-6 lg:p-8 hover-spring transition-all duration-700 z-10 hover:z-30 overflow-hidden [&:nth-child(odd)]:-translate-x-5 lg:[&:nth-child(odd)]:translate-y-4 [&:nth-child(even)]:translate-x-4 lg:[&:nth-child(even)]:-translate-y-2">
-                <div className="absolute top-4 right-4 z-40">
-                  <button onClick={() => deleteMeasurement(m.id)} className="p-2.5 rounded-[2px] bg-destructive/15 hover:bg-destructive/25 text-destructive hover-spring shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.1] hover:rotate-5">
-                    <X size={20} strokeWidth={2.5} />
-                  </button>
-                </div>
-                <div className="flex items-start gap-4 mb-6 lg:mb-8">
-                  <div className="w-14 h-14 lg:w-16 lg:h-16 rounded-[2px] bg-gradient-to-br from-success/40 to-primary/50 flex items-center justify-center shadow-2xl ring-2 ring-success/50 shrink-0 mt-2">
-                    <Pencil size={22} strokeWidth={3} className="text-success drop-shadow-lg" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-xl lg:text-2xl font-black tracking-[-0.04em] text-foreground drop-shadow-2xl group-hover:text-accent transition-colors duration-500 leading-tight">{format(m.date, "dd/MM/yyyy")}</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 lg:gap-4 text-base lg:text-lg pt-1">
-                  {[
-                    { label: 'Peso', value: `${m.weight}kg`, col: 'lg:col-span-1 xl:col-span-2', color: 'from-primary/20 to-accent/20' },
-                    { label: 'Peito', value: `${m.measurements.chest}cm`, col: 'col-span-1', color: 'from-warning/30 to-warning/10' },
-                    { label: 'Cintura', value: `${m.measurements.waist}cm`, col: 'col-span-1', color: 'from-destructive/20 to-destructive/5' },
-                    { label: 'Braço', value: `${m.measurements.arm}cm`, col: 'lg:col-span-1', color: 'from-success/30 to-success/10' },
-                    { label: 'Coxa', value: `${m.measurements.thigh}cm`, col: 'col-span-1 lg:col-span-2', color: 'from-accent/20 to-primary/10' },
-                    { label: 'Panturrilha', value: `${m.measurements.calf}cm`, col: 'col-span-1', color: 'from-muted/40 to-border/20' },
-                  ].map((item, i) => (
-                    <div key={item.label} data-stagger-index={30+i} className={`group/metric relative rounded-[2px] bg-gradient-to-br ${item.color} backdrop-blur-sm border border-border/30 shadow-lg hover:shadow-2xl p-4 lg:p-5 hover-spring hover:-translate-y-2 hover:scale-[1.03] transition-all duration-500 z-10 hover:z-20 ${item.col} ${i%2 ? 'translate-y-2 lg:translate-y-4 -translate-x-3' : '-translate-x-1 lg:-translate-x-2'}`}>
-                      <div className="flex flex-col items-center text-center h-full justify-center">
-                        <span className="text-xs lg:text-sm font-bold tracking-wider uppercase text-muted-foreground/90 block mb-2 px-1">{item.label}</span>
-                        <strong className="text-2xl lg:text-3xl font-black tracking-[-0.06em] text-foreground block drop-shadow-2xl group-hover/metric:text-accent transition-colors duration-500 leading-none">{item.value}</strong>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Charts tab */}
-        {activeTab === 'charts' && (
-          <div className="space-y-4">
-            {!selectedStudentId ? (
-              <p className="text-center text-sm text-muted-foreground py-10">Selecione um aluno para ver os gráficos</p>
-            ) : bioChartData.length < 2 ? (
-              <p className="text-center text-sm text-muted-foreground py-10">São necessários pelo menos 2 registros de bioimpedância</p>
-            ) : (
-              <>
-                {/* Written summary */}
-                {evolutionSummary && (
-                  <div className="card-surface p-4">
-                    <h4 className="text-xs font-bold text-muted-foreground mb-2">EVOLUÇÃO GERAL ({evolutionSummary.sessions} avaliações)</h4>
-                    <div className="space-y-1 text-sm">
-                      <p className="text-foreground">
-                        Peso: <strong className={evolutionSummary.weightDiff > 0 ? 'text-warning' : 'text-success'}>{evolutionSummary.weightDiff > 0 ? '+' : ''}{evolutionSummary.weightDiff.toFixed(1)}kg</strong>
-                      </p>
-                      <p className="text-foreground">
-                        Gordura: <strong className={evolutionSummary.fatDiff > 0 ? 'text-destructive' : 'text-success'}>{evolutionSummary.fatDiff > 0 ? '+' : ''}{evolutionSummary.fatDiff.toFixed(1)}kg</strong>
-                      </p>
-                      <p className="text-foreground">
-                        Massa Muscular: <strong className={evolutionSummary.muscleDiff > 0 ? 'text-success' : 'text-destructive'}>{evolutionSummary.muscleDiff > 0 ? '+' : ''}{evolutionSummary.muscleDiff.toFixed(1)}kg</strong>
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Weight & Muscle chart */}
-                <div className="card-surface p-4">
-                  <h4 className="text-xs font-bold text-muted-foreground mb-3">PESO E MASSA MUSCULAR</h4>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <LineChart data={bioChartData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis dataKey="date" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
-                      <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
-                      <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: '12px' }} />
-                      <Legend wrapperStyle={{ fontSize: '11px' }} />
-                      <Line type="monotone" dataKey="Peso" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} />
-                      <Line type="monotone" dataKey="Massa Muscular" stroke="hsl(var(--success))" strokeWidth={2} dot={{ r: 3 }} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-
-                {/* Body fat chart */}
-                <div className="card-surface p-4">
-                  <h4 className="text-xs font-bold text-muted-foreground mb-3">% GORDURA CORPORAL</h4>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <LineChart data={bioChartData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis dataKey="date" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
-                      <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
-                      <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: '12px' }} />
-                      <Line type="monotone" dataKey="Gordura %" stroke="hsl(var(--destructive))" strokeWidth={2} dot={{ r: 3 }} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* Photo modal - Brutal redesign */}
-        {showPhotoModal && (
-          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-foreground/60 backdrop-blur-sm">
-            <div className="group relative w-full max-w-2xl mx-4 max-h-[90vh] overflow-hidden rounded-[2px] bg-gradient-to-br from-card/98 via-card to-card/95 backdrop-blur-3xl border border-border/70 shadow-2xl hover:shadow-4xl hover-spring hover:-translate-y-1 transition-all duration-700" data-stagger-index="45">
-              <div className="absolute inset-0 bg-gradient-to-r from-primary/3 via-transparent to-accent/3 -skew-x-2 -translate-x-12 group-hover:translate-x-0 transition-transform duration-1200" />
-              <div className="p-8 lg:p-10 relative z-10">
-                <div className="flex items-start justify-between mb-8 lg:mb-12">
-                  <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 rounded-[2px] bg-gradient-to-br from-primary via-accent to-primary flex items-center justify-center shadow-2xl ring-3 ring-primary/40">
-                      <Camera size={24} strokeWidth={3} className="text-primary-foreground drop-shadow-lg" />
-                    </div>
-                    <div>
-                      <h3 className="text-2xl lg:text-3xl font-black tracking-[-0.05em] text-foreground drop-shadow-2xl leading-tight">Adicionar Fotos</h3>
-                      <p className="text-sm font-bold tracking-wider text-muted-foreground/90 uppercase mt-1">Progresso Visual</p>
-                    </div>
-                  </div>
-                  <button onClick={() => setShowPhotoModal(false)} className="group/close p-3 rounded-[2px] bg-destructive/10 hover:bg-destructive/20 text-destructive hover-spring shadow-lg hover:shadow-xl transition-all duration-400 hover:scale-110 hover:rotate-90 shrink-0 ml-4">
-                    <X size={22} strokeWidth={2.5} />
-                  </button>
-                </div>
-                <div className="space-y-6">
-                  <div>
-                    <label className="block text-xs font-black tracking-widest uppercase text-muted-foreground/80 mb-3">Data da Avaliação</label>
-                    <input type="date" value={photoDate} onChange={e => setPhotoDate(e.target.value)} className="w-full rounded-[2px] bg-card/80 backdrop-blur-sm border border-border/50 shadow-lg hover:shadow-xl hover:border-accent/60 focus:border-accent focus:shadow-2xl focus:outline-none p-4 lg:p-5 text-lg font-bold tracking-tight transition-all duration-500 hover-spring" />
-                  </div>
-                  <div className="grid grid-cols-3 gap-4 lg:gap-6">
-                    {[
-                      { ref: frontRef, file: frontFile, set: setFrontFile, label: 'Frente', pos: 'col-span-1 row-span-2 lg:-translate-x-2' },
-                      { ref: sideRef, file: sideFile, set: setSideFile, label: 'Lado', pos: 'col-span-2 row-span-1 lg:translate-y-3 z-10' },
-                      { ref: backRef, file: backFile, set: setBackFile, label: 'Costas', pos: 'col-span-1 row-span-1 lg:translate-y-6 -translate-x-1' }
-                    ].map(({ ref, file, set, label, pos }, i) => (
-                      <div key={label} className={`group/upload relative ${pos}`}>
-                        <input ref={ref} type="file" accept="image/*" className="hidden" onChange={e => set(e.target.files?.[0] || null)} />
-                        <button onClick={() => ref.current?.click()} className={`w-full h-32 lg:h-40 rounded-[2px] border-2 border-dashed overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-700 hover-spring group-hover/upload:scale-[1.02] relative ${file ? 'border-primary/70 bg-gradient-to-br from-primary/10 via-accent/5 to-primary/10 shadow-primary/20 ring-2 ring-primary/40' : 'border-border/40 bg-gradient-to-br from-muted/30 to-card/60 hover:border-accent/50 hover:bg-accent/10 text-muted-foreground/70'}`}>
-                          {file ? (
-                            <div className="absolute inset-0 bg-gradient-to-t from-primary/80 to-transparent flex flex-col items-center justify-center text-primary-foreground font-black text-lg tracking-tight drop-shadow-2xl">
-                              <span className="text-4xl mb-2">✓</span>
-                              <span>Pronto</span>
-                            </div>
-                          ) : (
-                            <>
-                              <div className="absolute inset-0 flex items-center justify-center opacity-20">
-                                <Camera size={32} strokeWidth={1.5} />
-                              </div>
-                              <div className="relative flex flex-col items-center justify-center h-full text-center px-4">
-                                <span className="text-lg lg:text-xl font-black tracking-tight mb-2 block">{label}</span>
-                                <span className="text-xs uppercase tracking-wider text-muted-foreground/60">Clique para selecionar</span>
-                              </div>
-                            </>
-                          )}
-                          <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-accent/20 text-accent-foreground text-xs font-black px-3 py-1 rounded-full shadow-lg whitespace-nowrap">Upload</div>
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                  <button onClick={handleSavePhoto} disabled={saving || !photoDate} className="group relative w-full rounded-[2px] bg-gradient-to-r from-primary via-accent to-primary border border-primary/50 shadow-3xl hover:shadow-4xl hover-spring hover:-translate-y-2 p-6 lg:p-8 transition-all duration-700 font-black tracking-[-0.04em] text-xl lg:text-2xl uppercase text-primary-foreground overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed disabled:hover-spring:none z-20">
-                    <div className="absolute inset-0 bg-gradient-to-r from-accent/30 to-primary/30 -skew-x-12 -translate-x-full group-hover:translate-x-0 transition-transform duration-1000" />
-                    <div className="relative flex items-center justify-center gap-4">
-                      {saving ? <span className="w-6 h-6 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" /> : <Plus size={28} strokeWidth={3} className="drop-shadow-2xl" />}
-                      <span>{saving ? 'Enviando...' : 'Salvar Fotos'}</span>
-                    </div>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Bio modal */}
-        {showBioModal && (
-          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-foreground/40">
-            <div className="card-surface w-full max-w-md mx-4 p-6 rounded-t-2xl sm:rounded-2xl animate-fade-in-up max-h-[85vh] overflow-y-auto">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-foreground">Bioimpedância</h3>
-                <button onClick={() => setShowBioModal(false)} className="text-muted-foreground"><X size={20} /></button>
-              </div>
-              <div className="space-y-3">
-                <div>
-                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Data</label>
-                  <input type="date" value={bioDate} onChange={e => setBioDate(e.target.value)} className="input-field" />
-                </div>
-
-                {/* Photo upload */}
-                <div>
-                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Foto do exame</label>
-                  <input ref={bioImageRef} type="file" accept="image/*" className="hidden" onChange={e => setBioImageFile(e.target.files?.[0] || null)} />
-                  <button onClick={() => bioImageRef.current?.click()}
-                    className={`w-full py-3 rounded-lg border-2 border-dashed flex items-center justify-center gap-2 text-sm transition-all ${bioImageFile ? 'border-primary bg-accent-light text-primary' : 'border-border text-muted-foreground'}`}>
-                    <Upload size={16} />{bioImageFile ? bioImageFile.name : 'Anexar foto'}
-                  </button>
-                </div>
-
-                {/* Comparison with last */}
-                {lastBio && (
-                  <div className="bg-muted rounded-lg p-3">
-                    <p className="text-[10px] font-bold text-muted-foreground mb-1">ÚLTIMO REGISTRO ({format(lastBio.date, 'dd/MM/yyyy')})</p>
-                    <div className="grid grid-cols-2 gap-1 text-[11px]">
-                      <span>Peso: {lastBio.data.weight}kg</span>
-                      <span>Gordura: {lastBio.data.bodyFatPct}%</span>
-                      <span>M. Muscular: {lastBio.data.muscleMass}kg</span>
-                      <span>G. Visceral: {lastBio.data.visceralFat}</span>
-                    </div>
-                  </div>
-                )}
-
-                {[
-                  { key: 'weight', label: 'Peso (kg)' },
-                  { key: 'bodyFatPct', label: '% Gordura' },
-                  { key: 'bodyFatKg', label: 'Gordura (kg)' },
-                  { key: 'muscleMass', label: 'Massa Muscular (kg)' },
-                  { key: 'visceralFat', label: 'Gordura Visceral' },
-                  { key: 'leanMass', label: 'Massa Magra (kg)' },
-                  { key: 'musclePct', label: '% Músculo' },
-                ].map(({ key, label }) => (
-                  <div key={key}>
-                    <label className="text-xs font-bold text-muted-foreground mb-1 block">{label}</label>
-                    <input type="number" step="0.1" value={(bioData as any)[key]} onChange={e => setBioData({ ...bioData, [key]: Number(e.target.value) })} className="input-field" />
-                  </div>
-                ))}
-                <button onClick={handleSaveBio} disabled={saving} className="btn btn-primary w-full py-3 text-sm font-bold">
-                  {saving ? 'Salvando...' : 'Salvar'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Measurements modal */}
-        {showMeasModal && (
-          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-foreground/40">
-            <div className="card-surface w-full max-w-md mx-4 p-6 rounded-t-2xl sm:rounded-2xl animate-fade-in-up max-h-[85vh] overflow-y-auto">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-foreground">Medidas Corporais</h3>
-                <button onClick={() => setShowMeasModal(false)} className="text-muted-foreground"><X size={20} /></button>
-              </div>
-              <div className="space-y-3">
-                <input type="date" value={measDate} onChange={e => setMeasDate(e.target.value)} className="input-field" />
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-xs font-bold text-muted-foreground mb-1 block">Peso (kg)</label>
-                    <input type="number" step="0.1" value={measWeight} onChange={e => setMeasWeight(Number(e.target.value))} className="input-field" />
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-muted-foreground mb-1 block">Altura (cm)</label>
-                    <input type="number" step="0.1" value={measHeight} onChange={e => setMeasHeight(Number(e.target.value))} className="input-field" />
-                  </div>
-                </div>
-                <p className="text-xs font-bold text-muted-foreground mt-2">Circunferências (cm)</p>
-                <div className="grid grid-cols-2 gap-2">
-                  {Object.entries(measData).map(([key, val]) => (
-                    <div key={key}>
-                      <label className="text-[10px] font-bold text-muted-foreground capitalize">{key === 'chest' ? 'Peito' : key === 'waist' ? 'Cintura' : key === 'hip' ? 'Quadril' : key === 'arm' ? 'Braço' : key === 'thigh' ? 'Coxa' : 'Panturrilha'}</label>
-                      <input type="number" step="0.1" value={val} onChange={e => setMeasData({ ...measData, [key]: Number(e.target.value) })} className="input-field py-2" />
-                    </div>
-                  ))}
-                </div>
-                <p className="text-xs font-bold text-muted-foreground mt-2">Dobras cutâneas (mm)</p>
-                <div className="grid grid-cols-2 gap-2">
-                  {Object.entries(sfData).map(([key, val]) => (
-                    <div key={key}>
-                      <label className="text-[10px] font-bold text-muted-foreground capitalize">{key === 'triceps' ? 'Tríceps' : key === 'biceps' ? 'Bíceps' : key === 'subscapular' ? 'Subescapular' : key === 'suprailiac' ? 'Suprailíaca' : 'Abdominal'}</label>
-                      <input type="number" step="0.1" value={val} onChange={e => setSfData({ ...sfData, [key]: Number(e.target.value) })} className="input-field py-2" />
-                    </div>
-                  ))}
-                </div>
-                <button onClick={handleSaveMeas} disabled={saving} className="btn btn-primary w-full py-3 text-sm font-bold">
-                  {saving ? 'Salvando...' : 'Salvar medidas'}
-                </button>
-              </div>
-            </div>
-          </div>
         )}
       </div>
+
+      {!selectedStudentId && (
+        <div className="text-center py-14">
+          <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-3" style={{background:'var(--n-100)',border:'1px solid var(--n-200)'}}><User size={24} style={{color:'var(--n-400)'}} /></div>
+          <p className="text-sm font-bold" style={{color:'var(--n-900)'}}>Nenhum cliente selecionado</p>
+          <p className="text-xs mt-1" style={{color:'var(--n-400)'}}>Selecione um cliente para ver sua evolução</p>
+        </div>
+      )}
+
+      {selectedStudentId && (<>
+        <div className="flex rounded-lg p-0.5 mb-4" style={{background:'var(--n-100)',border:'1px solid var(--n-200)'}}>
+          {tabs.map((tab) => { const Icon = tab.icon; return (
+            <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2 rounded-md text-xs font-semibold transition-all duration-120 touch-manipulation ${
+              activeTab === tab.id ? 'bg-white shadow-sm' : ''
+            }`} style={{color: activeTab === tab.id ? 'var(--accent)' : 'var(--n-400)'}}>
+              <Icon size={14} /><span>{tab.label}</span>
+            </button>
+          ); })}
+        </div>
+
+        {activeTab === 'photos' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-bold" style={{color:'var(--n-900)'}}>Comparativo de Fotos <span className="ml-1 text-xs font-normal" style={{color:'var(--n-400)'}}>{filteredPhotos.length} registros</span></h2>
+              <button onClick={() => setShowPhotoModal(true)} className="btn btn-primary text-xs px-3 py-2"><Plus size={14} />Adicionar</button>
+            </div>
+            {filteredPhotos.length === 0 && (
+              <div className="text-center py-12">
+                <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-3" style={{background:'var(--accent-light)',border:'1px solid var(--n-200)'}}><Camera size={24} style={{color:'var(--accent)'}} /></div>
+                <p className="text-sm font-bold" style={{color:'var(--n-900)'}}>Nenhuma foto registrada</p>
+                <p className="text-xs mt-1" style={{color:'var(--n-400)'}}>Adicione fotos para acompanhar a evolução</p>
+              </div>
+            )}
+            <div className="space-y-4">
+              {filteredPhotos.map((ps, idx) => (
+                <div key={ps.id} className="rounded-xl p-4 relative" style={{background:'var(--n-0)',border:'1px solid var(--n-200)'}}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{background:'var(--accent)',color:'var(--n-0)'}}><Camera size={13} /></div>
+                      <div>
+                        <div className="text-sm font-bold" style={{color:'var(--n-900)'}}>{ps.date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}</div>
+                        {idx === 0 && <span className="text-xs font-semibold" style={{color:'var(--accent)'}}>Mais recente</span>}
+                      </div>
+                    </div>
+                    <button onClick={() => { if(window.confirm('Excluir este comparativo de fotos?')) deletePhoto(ps.id); }} className="w-8 h-8 flex flex-col items-center justify-center rounded-lg hover:bg-red-50 text-red-400 hover:text-red-500 transition-colors">
+                      <X size={15} />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[{ label: 'Frente', src: ps.front }, { label: 'Lado', src: ps.side }, { label: 'Costas', src: ps.back }].map(({ label, src }) => (
+                      <div key={label}>
+                        <div className="text-xs font-semibold mb-1.5 text-center" style={{color:'var(--n-500)'}}>{label}</div>
+                        {src ? (
+                          <img
+                            src={src}
+                            alt={label}
+                            className="aspect-[3/4] w-full object-cover rounded-lg"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none';
+                              (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                            }}
+                          />
+                        ) : null}
+                        {(!src) && (
+                          <div className="aspect-[3/4] rounded-lg flex items-center justify-center" style={{background:'var(--n-100)',border:'1px dashed var(--n-300)'}}><Camera size={20} style={{color:'var(--n-300)'}} /></div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {activeTab === 'bioimpedance' && (
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <h2 className="text-sm font-bold" style={{color:'var(--n-900)'}}>Bioimpedâncias</h2>
+              <button onClick={() => setShowBioModal(true)} className="btn btn-primary text-xs px-3 py-2"><Plus size={14} />Adicionar</button>
+            </div>
+            {filteredBio.length === 0 && (
+              <div className="text-center py-12">
+                <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-3" style={{background:'var(--accent-light)',border:'1px solid var(--n-200)'}}><Upload size={24} style={{color:'var(--accent)'}} /></div>
+                <p className="text-sm font-medium" style={{color:'var(--n-400)'}}>Nenhuma bioimpedância registrada</p>
+              </div>
+            )}
+            <div className="space-y-4">
+              {filteredBio.map((bio, idx) => {
+                const prev = filteredBio[idx + 1];
+                const metrics = [
+                  { label: 'Peso Corporal',       value: bio.data.weight,      unit: 'kg',  prev: prev?.data.weight,      lowerIsBetter: true  },
+                  { label: '% Gordura',            value: bio.data.bodyFatPct,  unit: '%',   prev: prev?.data.bodyFatPct,  lowerIsBetter: true  },
+                  { label: 'Gordura (kg)',          value: bio.data.bodyFatKg,   unit: 'kg',  prev: prev?.data.bodyFatKg,   lowerIsBetter: true  },
+                  { label: 'Massa Muscular',        value: bio.data.muscleMass,  unit: 'kg',  prev: prev?.data.muscleMass,  lowerIsBetter: false },
+                  { label: 'Gordura Visceral',      value: bio.data.visceralFat, unit: 'nv',  prev: prev?.data.visceralFat, lowerIsBetter: true  },
+                  { label: 'Massa Magra',           value: bio.data.leanMass,    unit: 'kg',  prev: prev?.data.leanMass,    lowerIsBetter: false },
+                  { label: '% Massa Muscular',      value: bio.data.musclePct,   unit: '%',   prev: prev?.data.musclePct,   lowerIsBetter: false },
+                ];
+                return (
+                  <div key={bio.id} className="rounded-xl p-4" style={{background:'var(--n-0)',border:'1px solid var(--n-200)'}}>
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{background:'var(--accent)',color:'var(--n-0)'}}><Upload size={13} /></div>
+                        <div>
+                          <div className="text-sm font-semibold" style={{color:'var(--n-900)'}}>{bio.date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}</div>
+                          {idx === 0 && <span className="text-xs font-medium" style={{color:'var(--accent)'}}>Mais recente</span>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {bio.image ? (
+                          <button onClick={() => setBioImageViewer(bio.image)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors touch-manipulation" style={{background:'var(--accent-light)',color:'var(--accent)'}}>
+                            <Camera size={13} />Ver imagem
+                          </button>
+                        ) : null}
+                        <button onClick={() => openEditBio(bio)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-blue-50 transition-colors" style={{color:'var(--accent)'}} title="Editar">
+                          <Pencil size={14} />
+                        </button>
+                        <button onClick={() => { if(window.confirm('Excluir esta bioimpedância?')) deleteBioimpedance(bio.id); }} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-50 text-red-400 hover:text-red-500 transition-colors">
+                          <X size={15} />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {metrics.map((m) => {
+                        const diff = m.prev !== undefined ? m.value - m.prev : null;
+                        const improved = diff !== null && (m.lowerIsBetter ? diff < 0 : diff > 0);
+                        const worsened = diff !== null && (m.lowerIsBetter ? diff > 0 : diff < 0);
+                        return (
+                          <div key={m.label} className="rounded-lg p-2.5" style={{background:'var(--n-50)',border:'1px solid var(--n-200)'}}>
+                            <div className="text-xs mb-1 leading-tight" style={{color:'var(--n-500)'}}>{m.label}</div>
+                            <div className="text-sm font-bold" style={{color:'var(--n-900)'}}>{m.value}<span className="text-xs font-normal ml-0.5" style={{color:'var(--n-400)'}}>{m.unit}</span></div>
+                            {diff !== null && (
+                              <div className={`text-xs mt-0.5 flex items-center gap-0.5 font-medium ${improved ? 'text-green-500' : worsened ? 'text-red-500' : 'text-gray-400'}`}>
+                                {improved ? <TrendingDown size={10} /> : worsened ? <TrendingUp size={10} /> : null}
+                                {diff !== 0 && <span>{diff > 0 ? '+' : ''}{diff.toFixed(1)}</span>}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Bioimpedance Image Viewer Modal */}
+        {bioImageViewer && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setBioImageViewer(null)}>
+            <div className="relative max-w-lg w-full" onClick={e => e.stopPropagation()}>
+              <button onClick={() => setBioImageViewer(null)} className="absolute -top-10 right-0 w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center hover:bg-white/30 transition-colors">
+                <X size={16} className="text-white" />
+              </button>
+              <img src={bioImageViewer} alt="Bioimpedancia" className="w-full rounded-2xl shadow-2xl" />
+              <p className="text-center text-white/60 text-xs mt-3">Toque fora para fechar</p>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'measurements' && (
+          <div className="space-y-4 sm:space-y-5">
+            <div className="flex justify-between items-center">
+              <h2 className="text-sm font-bold" style={{color:'var(--n-900)'}}>Medidas e Dobras</h2>
+              <button onClick={() => setShowMeasModal(true)} className="btn btn-primary text-xs px-3 py-2"><Plus size={14} />Adicionar</button>
+            </div>
+            {filteredMeasurements.length === 0 && (
+              <div className="text-center py-12">
+                <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-3" style={{background:'var(--success-light)',border:'1px solid var(--n-200)'}}><TrendingUp size={24} style={{color:'var(--success)'}} /></div>
+                <p className="text-sm font-medium" style={{color:'var(--n-400)'}}>Nenhuma medida registrada</p>
+              </div>
+            )}
+            {filteredMeasurements.length > 0 && (<>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {measurementsChartData.length > 0 && (
+                  <div className="rounded-xl p-4 sm:col-span-2" style={{background:'var(--n-0)',border:'1px solid var(--n-200)'}}>
+                    <h3 className="text-sm font-semibold mb-3" style={{color:'var(--n-700)'}}>Medidas Corporais (cm)</h3>
+                    <ResponsiveContainer width="100%" height={180}>
+                      <LineChart data={measurementsChartData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                        <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} domain={['auto', 'auto']} />
+                        <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', fontSize: '12px' }} formatter={(v: any, n: any) => [`${v ?? ''} cm`, n === 'cintura' ? 'Cintura' : n === 'quadril' ? 'Quadril' : 'Peitoral']} />
+                        <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: '11px' }} formatter={(v: any) => v === 'cintura' ? 'Cintura' : v === 'quadril' ? 'Quadril' : 'Peitoral'} />
+                        <Line type="monotone" dataKey="cintura" stroke="#F59E0B" strokeWidth={2.5} dot={{ r: 4, fill: '#F59E0B', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} connectNulls />
+                        <Line type="monotone" dataKey="quadril" stroke="#8B5CF6" strokeWidth={2.5} dot={{ r: 4, fill: '#8B5CF6', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} connectNulls />
+                        <Line type="monotone" dataKey="peitoral" stroke="#06B6D4" strokeWidth={2.5} dot={{ r: 4, fill: '#06B6D4', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} connectNulls />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+                {weightData.length > 0 && (
+                  <div className="rounded-xl p-4" style={{background:'var(--n-0)',border:'1px solid var(--n-200)'}}>
+                    <h3 className="text-sm font-semibold mb-3" style={{color:'var(--n-700)'}}>Evolução do Peso</h3>
+                    <ResponsiveContainer width="100%" height={160}>
+                      <LineChart data={weightData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                        <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} domain={['auto', 'auto']} />
+                        <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', fontSize: '12px' }} formatter={(v: any) => [`${v ?? ''} kg`, 'Peso']} />
+                        <Line type="monotone" dataKey="peso" stroke="#3B82F6" strokeWidth={2.5} dot={{ r: 5, fill: '#3B82F6', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 7 }} connectNulls />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                {filteredMeasurements.map((m, idx) => {
+                  const prev = filteredMeasurements[idx + 1];
+                  return (
+                    <div key={m.id} className="rounded-xl p-4" style={{background:'var(--n-0)',border:'1px solid var(--n-200)'}}>
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{background:'var(--success)',color:'var(--n-0)'}}><TrendingUp size={13} /></div>
+                          <div>
+                            <div className="text-sm font-semibold" style={{color:'var(--n-900)'}}>{m.date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}</div>
+                            {idx === 0 && <span className="text-xs font-medium" style={{color:'var(--success)'}}>Mais recente</span>}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => openEditMeas(m)} className="w-8 h-8 flex flex-col items-center justify-center rounded-lg hover:bg-blue-50 transition-colors" style={{color:'var(--accent)'}} title="Editar">
+                            <Pencil size={14} />
+                          </button>
+                          <button onClick={() => { if(window.confirm('Excluir estas medidas?')) deleteMeasurement(m.id); }} className="w-8 h-8 flex flex-col items-center justify-center rounded-lg hover:bg-red-50 text-red-400 hover:text-red-500 transition-colors">
+                            <X size={15} />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                        {[
+                          { label: 'Peitoral', val: m.measurements.chest, prevVal: prev?.measurements.chest },
+                          { label: 'Cintura', val: m.measurements.waist, prevVal: prev?.measurements.waist },
+                          { label: 'Quadril', val: m.measurements.hip, prevVal: prev?.measurements.hip },
+                          { label: 'Braco', val: m.measurements.arm, prevVal: prev?.measurements.arm },
+                          { label: 'Coxa', val: m.measurements.thigh, prevVal: prev?.measurements.thigh },
+                          { label: 'Panturr.', val: m.measurements.calf, prevVal: prev?.measurements.calf },
+                        ].map(({ label, val, prevVal }) => {
+                          if (val === 0) return null;
+                          const d = prevVal !== undefined && prevVal > 0 ? val - prevVal : null;
+                          return (
+                            <div key={label} className="rounded-lg p-2 text-center" style={{background:'var(--n-50)',border:'1px solid var(--n-200)'}}>
+                              <div className="text-[10px] mb-0.5 uppercase font-bold" style={{color:'var(--n-500)'}}>{label}</div>
+                              <div className="text-sm font-bold" style={{color:'var(--n-900)'}}>{val}<span className="text-[10px] font-normal" style={{color:'var(--n-400)'}}>cm</span></div>
+                              {d !== null && d !== 0 && <div className={`text-[10px] font-bold ${d < 0 ? 'text-green-500' : 'text-red-500'}`}>{d > 0 ? '+' : ''}{d.toFixed(1)}</div>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {(m.skinfolds.triceps > 0 || m.skinfolds.abdominal > 0) && (
+                        <div className="mt-3 grid grid-cols-3 sm:grid-cols-5 gap-2 pt-3" style={{borderTop:'1px dashed var(--n-200)'}}>
+                           {Object.entries(m.skinfolds).map(([key, value]) => {
+                             if (value === 0) return null;
+                             return (
+                               <div key={key} className="text-center">
+                                 <div className="text-[9px] uppercase font-bold" style={{color:'var(--n-400)'}}>{key}</div>
+                                 <div className="text-xs font-bold" style={{color:'var(--n-600)'}}>{value}mm</div>
+                               </div>
+                             );
+                           })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </>)}
+          </div>
+        )}
+
+        {/* Photo Modal */}
+        {showPhotoModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.4)',backdropFilter:'blur(4px)'}}>
+            <div className="rounded-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden" style={{background: 'var(--n-0)', border: '1px solid var(--n-200)', boxShadow: 'var(--sh-lg)'}}>
+              <div className="flex items-center justify-between p-5 border-b" style={{borderColor: 'var(--n-200)'}}>
+                <div>
+                  <h3 className="text-base font-bold" style={{color: 'var(--n-900)'}}>Adicionar Fotos</h3>
+                  <p className="text-xs mt-0.5" style={{color: 'var(--n-500)'}}>Defina a data antes de enviar as fotos</p>
+                </div>
+                <button onClick={closePhotoModal} className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors" style={{background: 'var(--n-100)'}}>
+                  <X size={16} style={{color: 'var(--n-500)'}} />
+                </button>
+              </div>
+              <div className="p-5 space-y-4 overflow-y-auto flex-1">
+                <div>
+                  <label className="block text-xs font-semibold mb-1.5" style={{color: 'var(--n-700)'}}>Data do registro <span style={{color: 'var(--error)'}}>*</span></label>
+                  <div className="relative">
+                    <CalendarDays size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{color: 'var(--n-400)'}} />
+                    <input type="date" value={photoDate} onChange={e => setPhotoDate(e.target.value)} className="input-base w-full pl-9" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  {([
+                    { slot: 'front' as const, label: 'Frente', ref: frontRef, upload: frontUpload },
+                    { slot: 'side'  as const, label: 'Lado',   ref: sideRef,  upload: sideUpload },
+                    { slot: 'back'  as const, label: 'Costas', ref: backRef,  upload: backUpload },
+                  ]).map(({ slot, label, ref, upload }) => (
+                    <div key={slot}>
+                      <div className="text-xs font-medium mb-1.5 text-center" style={{color: 'var(--n-500)'}}>{label}</div>
+                      <button
+                        disabled={!photoDate}
+                        onClick={() => ref.current?.click()}
+                        className={`relative w-full aspect-[3/4] rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-1.5 transition-all overflow-hidden ${
+                          !photoDate ? 'opacity-40 cursor-not-allowed' : ''
+                        }`}
+                        style={upload.previewUrl
+                          ? { borderColor: 'transparent', padding: 0 }
+                          : { borderColor: 'var(--n-300)', background: 'var(--n-50)' }
+                        }
+                      >
+                        {upload.compressing ? (
+                          <div className="flex flex-col items-center gap-1.5">
+                            <div className="spinner" style={{width: 20, height: 20}} />
+                            <span className="text-[10px] font-medium" style={{color: 'var(--accent)'}}>Comprimindo...</span>
+                          </div>
+                        ) : upload.previewUrl ? (
+                          <>
+                            <img src={upload.previewUrl} alt={label} className="w-full h-full object-cover" />
+                            <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full flex items-center justify-center" style={{background: 'var(--accent)'}}>
+                              <CheckCircle2 size={12} className="text-white" />
+                            </div>
+                            <div className="absolute bottom-1.5 left-1.5 right-1.5 text-center">
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{background: 'rgba(0,0,0,0.5)', color: '#fff'}}>
+                                {upload.file ? `${Math.round(upload.file.size / 1024)}KB` : ''}
+                              </span>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <Camera size={20} style={{color: 'var(--n-400)'}} />
+                            <span className="text-[10px] font-medium" style={{color: 'var(--n-400)'}}>
+                              {photoDate ? 'Abrir Galeria' : 'Data primeiro'}
+                            </span>
+                          </>
+                        )}
+                      </button>
+                      {upload.error && <p className="text-[10px] mt-1 text-center" style={{color: 'var(--error)'}}>{upload.error}</p>}
+                      <input
+                        ref={ref}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={e => upload.setFile(e.target.files?.[0])}
+                      />
+                    </div>
+                  ))}
+                </div>
+                {!photoDate && <p className="text-xs rounded-lg px-3 py-2" style={{color: 'var(--warning)', background: 'var(--warning-light)'}}>Insira a data do registro para habilitar o envio de fotos.</p>}
+              </div>
+              <div className="flex gap-3 p-5 border-t bg-white" style={{borderColor: 'var(--n-200)'}}>
+                <button onClick={closePhotoModal} className="flex-1 py-2.5 rounded-lg text-sm font-medium transition-colors" style={{border: '1px solid var(--n-200)', color: 'var(--n-600)'}}>Cancelar</button>
+                <button
+                  onClick={handleAddPhoto}
+                  disabled={saving
+                    || frontUpload.compressing || sideUpload.compressing || backUpload.compressing
+                    || !photoDate
+                    || (!frontUpload.file && !sideUpload.file && !backUpload.file)
+                  }
+                  className="btn btn-primary flex-1 py-2.5 text-sm font-bold disabled:opacity-40"
+                >
+                  {(frontUpload.compressing || sideUpload.compressing || backUpload.compressing)
+                    ? 'Comprimindo...'
+                    : saving ? 'Salvando...' : 'Salvar'
+                  }
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Bioimpedance Modal */}
+        {showBioModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 lg:p-8" style={{background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)'}}>
+            <div className="rounded-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden" style={{background: 'var(--n-0)', border: '1px solid var(--n-200)', boxShadow: 'var(--sh-lg)'}}>
+              {/* Header Fixo */}
+              <div className="flex items-center justify-between p-5 border-b" style={{borderColor: 'var(--n-200)'}}>
+                <h3 className="text-base font-bold" style={{color: 'var(--n-900)'}}>{editingBioId ? 'Editar Bioimpedância' : 'Nova Bioimpedância'}</h3>
+                <button onClick={closeBioModal} className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors" style={{background: 'var(--n-100)'}}>
+                  <X size={16} style={{color: 'var(--n-500)'}} />
+                </button>
+              </div>
+
+              {/* Conteúdo com Scroll */}
+              <div className="p-5 space-y-4 overflow-y-auto flex-1">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-semibold" style={{color: 'var(--n-600)'}}>Data</label>
+                    <input type="date" value={bioDate} onChange={e => setBioDate(e.target.value)} className="input-base w-full mt-1" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold" style={{color: 'var(--n-600)'}}>Imagem Exame</label>
+                    <button
+                      onClick={() => bioFileRef.current?.click()}
+                      className="input-base w-full mt-1 truncate text-left text-xs flex items-center gap-2"
+                    >
+                      <Upload size={13} style={{color: 'var(--n-400)'}} />
+                      <span className="truncate">{bioUpload.file ? bioUpload.file.name : 'Abrir Galeria...'}</span>
+                    </button>
+                    <input ref={bioFileRef} type="file" className="hidden" accept="image/*" onChange={e => bioUpload.setFile(e.target.files?.[0])} />
+                  </div>
+                </div>
+
+                {bioUpload.previewUrl && (
+                  <div className="relative rounded-xl overflow-hidden" style={{border: '1px solid var(--n-200)'}}>
+                    <img src={bioUpload.previewUrl} alt="Preview bioimpedância" className="w-full max-h-48 object-contain" style={{background: 'var(--n-50)'}} />
+                    <button onClick={bioUpload.clear} className="absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center" style={{background: 'rgba(0,0,0,0.5)'}}>
+                      <X size={13} className="text-white" />
+                    </button>
+                  </div>
+                )}
+                {bioUpload.error && <p className="text-xs" style={{color: 'var(--error)'}}>{bioUpload.error}</p>}
+
+                <div className="grid grid-cols-2 gap-3 pb-2">
+                  {[
+                    { label: 'Peso (kg)', key: 'weight' },
+                    { label: '% Gordura', key: 'bodyFatPct' },
+                    { label: 'Gordura (kg)', key: 'bodyFatKg' },
+                    { label: 'Massa Musc (kg)', key: 'muscleMass' },
+                    { label: 'Gord. Visceral', key: 'visceralFat' },
+                    { label: 'Massa Magra (kg)', key: 'leanMass' },
+                    { label: '% Mas. Musc', key: 'musclePct' },
+                  ].map(field => (
+                    <div key={field.key}>
+                      <label className="text-[10px] font-bold uppercase" style={{color: 'var(--n-500)'}}>{field.label}</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={bioData[field.key as keyof typeof bioData] || ''}
+                        placeholder="0"
+                        onFocus={(e) => field.key !== 'musclePct' && e.target.select()}
+                        onChange={e => setBioData({...bioData, [field.key]: e.target.value === '' ? 0 : Number(e.target.value)})}
+                        readOnly={field.key === 'musclePct'}
+                        className={`input-base w-full mt-1 ${field.key === 'musclePct' ? 'opacity-60 bg-black/[0.03] cursor-not-allowed' : ''}`}
+                        title={field.key === 'musclePct' ? 'Calculado automaticamente (Massa Musc / Peso)' : ''}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Rodapé Fixo */}
+              <div className="flex gap-3 p-5 border-t bg-white" style={{borderColor: 'var(--n-200)'}}>
+                <button onClick={closeBioModal} className="flex-1 py-2.5 rounded-lg text-sm font-medium" style={{border: '1px solid var(--n-200)', color: 'var(--n-600)'}}>Cancelar</button>
+                <button onClick={handleAddBio} disabled={saving} className="btn btn-primary flex-1 py-2.5 text-sm font-bold">{saving ? 'Salvando...' : 'Salvar'}</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Measurements Modal */}
+        {showMeasModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 lg:p-8" style={{background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)'}}>
+            <div className="rounded-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden" style={{background: 'var(--n-0)', border: '1px solid var(--n-200)', boxShadow: 'var(--sh-lg)'}}>
+              {/* Header Fixo */}
+              <div className="flex items-center justify-between p-5 border-b" style={{borderColor: 'var(--n-200)'}}>
+                <h3 className="text-base font-bold" style={{color: 'var(--n-900)'}}>{editingMeasId ? 'Editar Medidas' : 'Novas Medidas'}</h3>
+                <button onClick={closeMeasModal} className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors" style={{background: 'var(--n-100)'}}>
+                  <X size={16} style={{color: 'var(--n-500)'}} />
+                </button>
+              </div>
+
+              {/* Conteúdo com Scroll */}
+              <div className="p-5 space-y-6 overflow-y-auto flex-1">
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="col-span-1">
+                    <label className="text-[10px] font-bold" style={{color: 'var(--n-600)'}}>Data</label>
+                    <input type="date" value={measDate} onChange={e => setMeasDate(e.target.value)} className="input-base w-full mt-1 text-xs" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold" style={{color: 'var(--n-600)'}}>Peso (kg)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={measWeight || ''}
+                      placeholder="0"
+                      onFocus={(e) => e.target.select()}
+                      onChange={e => setMeasWeight(e.target.value === '' ? 0 : Number(e.target.value))}
+                      className="input-base w-full mt-1"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold" style={{color: 'var(--n-600)'}}>Altura (cm)</label>
+                    <input
+                      type="number"
+                      value={measHeight || ''}
+                      placeholder="0"
+                      onFocus={(e) => e.target.select()}
+                      onChange={e => setMeasHeight(e.target.value === '' ? 0 : Number(e.target.value))}
+                      className="input-base w-full mt-1"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="text-xs font-bold mb-3 flex items-center gap-2" style={{color: 'var(--accent)'}}><div className="flex-1 h-px" style={{background: 'var(--n-100)'}}></div>Perímetros (cm)<div className="flex-1 h-px" style={{background: 'var(--n-100)'}}></div></h4>
+                  <div className="grid grid-cols-3 gap-3">
+                    {Object.keys(measValues).map(k => (
+                      <div key={k}>
+                        <label className="text-[10px] font-bold uppercase" style={{color: 'var(--n-500)'}}>{k === 'chest' ? 'Peito' : k === 'waist' ? 'Cintura' : k === 'hip' ? 'Quadril' : k === 'arm' ? 'Braço' : k === 'thigh' ? 'Coxa' : 'Panturr.'}</label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={measValues[k as keyof typeof measValues] || ''}
+                          placeholder="0"
+                          onFocus={(e) => e.target.select()}
+                          onChange={e => setMeasValues({...measValues, [k]: e.target.value === '' ? 0 : Number(e.target.value)})}
+                          className="input-base w-full mt-1"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="pb-2">
+                  <h4 className="text-xs font-bold mb-3 flex items-center gap-2" style={{color: 'var(--error)'}}><div className="flex-1 h-px" style={{background: 'var(--n-100)'}}></div>Dobras (mm)<div className="flex-1 h-px" style={{background: 'var(--n-100)'}}></div></h4>
+                  <div className="grid grid-cols-3 gap-3">
+                    {Object.keys(skinfolds).map(k => (
+                      <div key={k}>
+                        <label className="text-[10px] font-bold uppercase" style={{color: 'var(--n-500)'}}>
+                          {k === 'triceps' ? 'Triceps' : k === 'biceps' ? 'Biceps' : k === 'subscapular' ? 'Subscap.' : k === 'suprailiac' ? 'Suprail.' : 'Abdom.'}
+                        </label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={skinfolds[k as keyof typeof skinfolds] || ''}
+                          placeholder="0"
+                          onFocus={(e) => e.target.select()}
+                          onChange={e => setSkinfolds({...skinfolds, [k]: e.target.value === '' ? 0 : Number(e.target.value)})}
+                          className="input-base w-full mt-1"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Rodapé Fixo */}
+              <div className="flex gap-3 p-5 border-t bg-white" style={{borderColor: 'var(--n-200)'}}>
+                <button onClick={() => setShowMeasModal(false)} className="flex-1 py-2.5 rounded-lg text-sm font-medium" style={{border: '1px solid var(--n-200)', color: 'var(--n-600)'}}>Cancelar</button>
+                <button onClick={handleAddMeas} disabled={saving} className="btn btn-primary flex-1 py-2.5 text-sm font-bold">{saving ? 'Salvando...' : 'Salvar'}</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </>)}
+      </div>
+    </div>
+  );
+};
+
+const Evolution: React.FC = () => {
+  const { canAccessEvolution } = usePermissions();
+  return (
+    <FeatureGate
+      allowed={canAccessEvolution}
+      feature="evolution"
+      title="Módulo de Evolução"
+      description="Acompanhe fotos de progresso, bioimpedância e medidas dos seus clientes. Disponível no plano Premium."
+    >
+      <EvolutionContent />
     </FeatureGate>
   );
 };

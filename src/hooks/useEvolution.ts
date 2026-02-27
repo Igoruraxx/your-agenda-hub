@@ -74,9 +74,21 @@ export function useEvolution(studentId?: string) {
     const filters = { user_id: currentUser.id, ...(studentId ? { student_id: studentId } : {}) };
 
     const [photosRes, bioRes, measRes] = await Promise.all([
-      supabase.from('evolution_photos').select('*').match(filters).order('date', { ascending: false }),
-      supabase.from('bioimpedance').select('*').match(filters).order('date', { ascending: true }),
-      supabase.from('measurements').select('*').match(filters).order('date', { ascending: true }),
+      supabase
+        .from('evolution_photos')
+        .select('*')
+        .match(filters)
+        .order('date', { ascending: false }),
+      supabase
+        .from('bioimpedance')
+        .select('*')
+        .match(filters)
+        .order('date', { ascending: true }),
+      supabase
+        .from('measurements')
+        .select('*')
+        .match(filters)
+        .order('date', { ascending: true }),
     ]);
 
     if (photosRes.error) setError(photosRes.error.message);
@@ -89,18 +101,34 @@ export function useEvolution(studentId?: string) {
     setLoading(false);
   }, [currentUser.id, isAuthenticated, studentId]);
 
-  useEffect(() => { fetchAll(); }, [fetchAll]);
+  useEffect(() => {
+    fetchAll();
+  }, [fetchAll]);
 
+  // Upload photo to Supabase Storage, retorna URL pública
   const uploadPhoto = useCallback(async (file: File, pathWithoutExt: string): Promise<string> => {
+    // Detectar extensão real do arquivo
     const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
     const fullPath = `${currentUser.id}/${pathWithoutExt}.${ext}`;
 
     const { data, error: err } = await supabase.storage
       .from('evolution-photos')
-      .upload(fullPath, file, { cacheControl: '3600', upsert: true, contentType: file.type });
+      .upload(fullPath, file, {
+        cacheControl: '3600',
+        upsert: true,
+        contentType: file.type,
+      });
 
-    if (err) throw new Error(err.message);
-    const { data: urlData } = supabase.storage.from('evolution-photos').getPublicUrl(data.path);
+    if (err) {
+      console.error('[useEvolution] Erro no upload de foto:', err.message);
+      throw new Error(err.message);
+    }
+
+    const { data: urlData } = supabase.storage
+      .from('evolution-photos')
+      .getPublicUrl(data.path);
+
+    console.log('[useEvolution] URL pública gerada:', urlData.publicUrl);
     return urlData.publicUrl;
   }, [currentUser.id]);
 
@@ -112,26 +140,36 @@ export function useEvolution(studentId?: string) {
     backFile?: File;
   }) => {
     if (!currentUser.id) return;
+
     const timestamp = Date.now();
 
+    // Uploads independentes — um falhar não bloqueia os outros
     const [frontUrl, sideUrl, backUrl] = await Promise.all([
-      photo.frontFile ? uploadPhoto(photo.frontFile, `${photo.studentId}/${timestamp}-front`).catch(() => null) : Promise.resolve(null),
-      photo.sideFile ? uploadPhoto(photo.sideFile, `${photo.studentId}/${timestamp}-side`).catch(() => null) : Promise.resolve(null),
-      photo.backFile ? uploadPhoto(photo.backFile, `${photo.studentId}/${timestamp}-back`).catch(() => null) : Promise.resolve(null),
+      photo.frontFile
+        ? uploadPhoto(photo.frontFile, `${photo.studentId}/${timestamp}-front`).catch(e => { console.error('Front upload failed:', e); return null; })
+        : Promise.resolve(null),
+      photo.sideFile
+        ? uploadPhoto(photo.sideFile, `${photo.studentId}/${timestamp}-side`).catch(e => { console.error('Side upload failed:', e); return null; })
+        : Promise.resolve(null),
+      photo.backFile
+        ? uploadPhoto(photo.backFile, `${photo.studentId}/${timestamp}-back`).catch(e => { console.error('Back upload failed:', e); return null; })
+        : Promise.resolve(null),
     ]);
 
     if (!frontUrl && !sideUrl && !backUrl) {
-      throw new Error('Nenhuma foto foi enviada com sucesso.');
+      throw new Error('Nenhuma foto foi enviada com sucesso. Verifique o bucket de storage do Supabase.');
     }
 
-    const { error: err } = await supabase.from('evolution_photos').insert({
-      user_id: currentUser.id,
-      student_id: photo.studentId,
-      date: photo.date,
-      front_url: frontUrl,
-      side_url: sideUrl,
-      back_url: backUrl,
-    });
+    const { error: err } = await supabase
+      .from('evolution_photos')
+      .insert({
+        user_id: currentUser.id,
+        student_id: photo.studentId,
+        date: photo.date,
+        front_url: frontUrl,
+        side_url: sideUrl,
+        back_url: backUrl,
+      });
 
     if (err) throw new Error(err.message);
     await fetchAll();
@@ -151,27 +189,37 @@ export function useEvolution(studentId?: string) {
       const path = `${currentUser.id}/${bio.studentId}/${Date.now()}.${ext}`;
       const { data: uploadData, error: uploadErr } = await supabase.storage
         .from('bioimpedance-images')
-        .upload(path, bio.imageFile, { cacheControl: '3600', upsert: true, contentType: bio.imageFile.type });
+        .upload(path, bio.imageFile, {
+          cacheControl: '3600',
+          upsert: true,
+          contentType: bio.imageFile.type,
+        });
 
       if (!uploadErr && uploadData) {
-        const { data: urlData } = supabase.storage.from('bioimpedance-images').getPublicUrl(uploadData.path);
+        const { data: urlData } = supabase.storage
+          .from('bioimpedance-images')
+          .getPublicUrl(uploadData.path);
         imageUrl = urlData.publicUrl;
+      } else if (uploadErr) {
+        console.error('[useEvolution] Erro upload bio:', uploadErr.message);
       }
     }
 
-    const { error: err } = await supabase.from('bioimpedance').insert({
-      user_id: currentUser.id,
-      student_id: bio.studentId,
-      date: bio.date,
-      image_url: imageUrl,
-      weight: bio.data.weight,
-      body_fat_pct: bio.data.bodyFatPct,
-      body_fat_kg: bio.data.bodyFatKg,
-      muscle_mass: bio.data.muscleMass,
-      visceral_fat: bio.data.visceralFat,
-      lean_mass: bio.data.leanMass,
-      muscle_pct: bio.data.musclePct,
-    });
+    const { error: err } = await supabase
+      .from('bioimpedance')
+      .insert({
+        user_id: currentUser.id,
+        student_id: bio.studentId,
+        date: bio.date,
+        image_url: imageUrl,
+        weight: bio.data.weight,
+        body_fat_pct: bio.data.bodyFatPct,
+        body_fat_kg: bio.data.bodyFatKg,
+        muscle_mass: bio.data.muscleMass,
+        visceral_fat: bio.data.visceralFat,
+        lean_mass: bio.data.leanMass,
+        muscle_pct: bio.data.musclePct,
+      });
 
     if (err) throw new Error(err.message);
     await fetchAll();
@@ -187,24 +235,26 @@ export function useEvolution(studentId?: string) {
   }) => {
     if (!currentUser.id) return;
 
-    const { error: err } = await supabase.from('measurements').insert({
-      user_id: currentUser.id,
-      student_id: m.studentId,
-      date: m.date,
-      weight: m.weight,
-      height: m.height,
-      chest: m.measurements.chest,
-      waist: m.measurements.waist,
-      hip: m.measurements.hip,
-      arm: m.measurements.arm,
-      thigh: m.measurements.thigh,
-      calf: m.measurements.calf,
-      sf_triceps: m.skinfolds.triceps,
-      sf_biceps: m.skinfolds.biceps,
-      sf_subscapular: m.skinfolds.subscapular,
-      sf_suprailiac: m.skinfolds.suprailiac,
-      sf_abdominal: m.skinfolds.abdominal,
-    });
+    const { error: err } = await supabase
+      .from('measurements')
+      .insert({
+        user_id: currentUser.id,
+        student_id: m.studentId,
+        date: m.date,
+        weight: m.weight,
+        height: m.height,
+        chest: m.measurements.chest,
+        waist: m.measurements.waist,
+        hip: m.measurements.hip,
+        arm: m.measurements.arm,
+        thigh: m.measurements.thigh,
+        calf: m.measurements.calf,
+        sf_triceps: m.skinfolds.triceps,
+        sf_biceps: m.skinfolds.biceps,
+        sf_subscapular: m.skinfolds.subscapular,
+        sf_suprailiac: m.skinfolds.suprailiac,
+        sf_abdominal: m.skinfolds.abdominal,
+      });
 
     if (err) throw new Error(err.message);
     await fetchAll();
@@ -238,15 +288,16 @@ export function useEvolution(studentId?: string) {
   }) => {
     if (!currentUser.id) return;
     const payload: Record<string, unknown> = {};
+
     if (updates.date) payload.date = updates.date;
     if (updates.data) {
-      if (updates.data.weight !== undefined) payload.weight = updates.data.weight;
-      if (updates.data.bodyFatPct !== undefined) payload.body_fat_pct = updates.data.bodyFatPct;
-      if (updates.data.bodyFatKg !== undefined) payload.body_fat_kg = updates.data.bodyFatKg;
-      if (updates.data.muscleMass !== undefined) payload.muscle_mass = updates.data.muscleMass;
-      if (updates.data.visceralFat !== undefined) payload.visceral_fat = updates.data.visceralFat;
-      if (updates.data.leanMass !== undefined) payload.lean_mass = updates.data.leanMass;
-      if (updates.data.musclePct !== undefined) payload.muscle_pct = updates.data.musclePct;
+      if (updates.data.weight     !== undefined) payload.weight        = updates.data.weight;
+      if (updates.data.bodyFatPct !== undefined) payload.body_fat_pct  = updates.data.bodyFatPct;
+      if (updates.data.bodyFatKg  !== undefined) payload.body_fat_kg   = updates.data.bodyFatKg;
+      if (updates.data.muscleMass !== undefined) payload.muscle_mass   = updates.data.muscleMass;
+      if (updates.data.visceralFat!== undefined) payload.visceral_fat  = updates.data.visceralFat;
+      if (updates.data.leanMass   !== undefined) payload.lean_mass     = updates.data.leanMass;
+      if (updates.data.musclePct  !== undefined) payload.muscle_pct    = updates.data.musclePct;
     }
     if (updates.imageFile) {
       const ext = updates.imageFile.name.split('.').pop()?.toLowerCase() || 'jpg';
@@ -261,6 +312,7 @@ export function useEvolution(studentId?: string) {
     } else if (updates.imageFile === null) {
       payload.image_url = null;
     }
+
     const { error } = await supabase.from('bioimpedance').update(payload).eq('id', id);
     if (error) throw new Error(error.message);
     await fetchAll();
@@ -275,23 +327,23 @@ export function useEvolution(studentId?: string) {
   }) => {
     if (!currentUser.id) return;
     const payload: Record<string, unknown> = {};
-    if (m.date !== undefined) payload.date = m.date;
+    if (m.date   !== undefined) payload.date   = m.date;
     if (m.weight !== undefined) payload.weight = m.weight;
     if (m.height !== undefined) payload.height = m.height;
     if (m.measurements) {
-      if (m.measurements.chest !== undefined) payload.chest = m.measurements.chest;
-      if (m.measurements.waist !== undefined) payload.waist = m.measurements.waist;
-      if (m.measurements.hip !== undefined) payload.hip = m.measurements.hip;
-      if (m.measurements.arm !== undefined) payload.arm = m.measurements.arm;
-      if (m.measurements.thigh !== undefined) payload.thigh = m.measurements.thigh;
-      if (m.measurements.calf !== undefined) payload.calf = m.measurements.calf;
+      if (m.measurements.chest  !== undefined) payload.chest  = m.measurements.chest;
+      if (m.measurements.waist  !== undefined) payload.waist  = m.measurements.waist;
+      if (m.measurements.hip    !== undefined) payload.hip    = m.measurements.hip;
+      if (m.measurements.arm    !== undefined) payload.arm    = m.measurements.arm;
+      if (m.measurements.thigh  !== undefined) payload.thigh  = m.measurements.thigh;
+      if (m.measurements.calf   !== undefined) payload.calf   = m.measurements.calf;
     }
     if (m.skinfolds) {
-      if (m.skinfolds.triceps !== undefined) payload.sf_triceps = m.skinfolds.triceps;
-      if (m.skinfolds.biceps !== undefined) payload.sf_biceps = m.skinfolds.biceps;
-      if (m.skinfolds.subscapular !== undefined) payload.sf_subscapular = m.skinfolds.subscapular;
-      if (m.skinfolds.suprailiac !== undefined) payload.sf_suprailiac = m.skinfolds.suprailiac;
-      if (m.skinfolds.abdominal !== undefined) payload.sf_abdominal = m.skinfolds.abdominal;
+      if (m.skinfolds.triceps      !== undefined) payload.sf_triceps     = m.skinfolds.triceps;
+      if (m.skinfolds.biceps       !== undefined) payload.sf_biceps      = m.skinfolds.biceps;
+      if (m.skinfolds.subscapular  !== undefined) payload.sf_subscapular = m.skinfolds.subscapular;
+      if (m.skinfolds.suprailiac   !== undefined) payload.sf_suprailiac  = m.skinfolds.suprailiac;
+      if (m.skinfolds.abdominal    !== undefined) payload.sf_abdominal   = m.skinfolds.abdominal;
     }
     const { error } = await supabase.from('measurements').update(payload).eq('id', id);
     if (error) throw new Error(error.message);
@@ -299,8 +351,19 @@ export function useEvolution(studentId?: string) {
   }, [currentUser.id, fetchAll]);
 
   return {
-    photos, bioimpedance, measurements, loading, error,
-    addPhoto, addBioimpedance, addMeasurement, updateBioimpedance, updateMeasurement,
-    deletePhoto, deleteBioimpedance, deleteMeasurement, refetch: fetchAll,
+    photos,
+    bioimpedance,
+    measurements,
+    loading,
+    error,
+    addPhoto,
+    addBioimpedance,
+    addMeasurement,
+    updateBioimpedance,
+    updateMeasurement,
+    deletePhoto,
+    deleteBioimpedance,
+    deleteMeasurement,
+    refetch: fetchAll,
   };
 }

@@ -1,13 +1,27 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = 'https://irergynffqnkertdagbs.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlyZXJneW5mZnFua2VydGRhZ2JzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4OTM4NjAsImV4cCI6MjA4NzQ2OTg2MH0.qhd5kkVZFGDfeXW41ut57ZB0jvnBf7I5Mn6p-FPDc4I';
+const supabaseUrl = process.env.REACT_APP_SUPABASE_URL!;
+const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY!;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: true,
-    storage: localStorage,
-  },
-});
+
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.warn(
+    '[Supabase] Variáveis de ambiente não configuradas. ' +
+    'Defina REACT_APP_SUPABASE_URL e REACT_APP_SUPABASE_ANON_KEY no arquivo .env.local'
+  );
+}
+
+export const supabase = createClient(
+  supabaseUrl ?? '',
+  supabaseAnonKey ?? '',
+  {
+    auth: {
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: true,
+      storageKey: 'fitpro-auth-token',
+      storage: window.localStorage
+    },
+  }
+);
