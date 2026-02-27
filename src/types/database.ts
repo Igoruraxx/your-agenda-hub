@@ -14,6 +14,9 @@ export interface Database {
           subscription_status: 'free' | 'active' | 'canceled' | 'past_due';
           subscription_product_id: string | null;
           subscription_end_date: string | null;
+          premium_expires_at: string | null;
+          premium_origin: string | null;
+          trial_started_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -27,6 +30,9 @@ export interface Database {
           subscription_status?: 'free' | 'active' | 'canceled' | 'past_due';
           subscription_product_id?: string | null;
           subscription_end_date?: string | null;
+          premium_expires_at?: string | null;
+          premium_origin?: string | null;
+          trial_started_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -39,6 +45,9 @@ export interface Database {
           subscription_status?: 'free' | 'active' | 'canceled' | 'past_due';
           subscription_product_id?: string | null;
           subscription_end_date?: string | null;
+          premium_expires_at?: string | null;
+          premium_origin?: string | null;
+          trial_started_at?: string | null;
           updated_at?: string;
         };
       };
