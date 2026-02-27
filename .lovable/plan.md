@@ -1,53 +1,72 @@
 
+# Fix: Login nao carrega perfil (Race Condition no React StrictMode)
 
-# Plan: Ocean Breeze Theme + Admin Panel Fixes
+## Causa Raiz
 
-## 1. Apply Ocean Breeze Theme
+O bug esta no `mountedRef` dentro do `AuthContext.tsx`. Em React 18 StrictMode, o `useEffect` executa assim:
 
-Update `src/index.css` CSS variables to match the Ocean Breeze color palette from 21st.dev:
+1. Monta -> efeito roda (`mountedRef.current = true`)
+2. Desmonta (cleanup) -> `mountedRef.current = false`
+3. Remonta -> efeito roda novamente, MAS `mountedRef.current` continua `false` porque nunca e resetado
 
-| Variable | Current | New (Ocean Breeze) |
-|----------|---------|-------------------|
-| --accent | #2563eb (blue) | #22c55e (green) |
-| --accent-light | #eff6ff | #d1fae5 |
-| --accent-dark | #1d4ed8 | #16a34a |
-| --n-0 (white) | #ffffff | #ffffff |
-| --n-50 | #f8fafc | #f0f8ff |
-| --n-100 (bg) | #f1f5f9 | #f0f8ff |
-| --n-200 (border) | #e2e8f0 | #e5e7eb |
-| --n-300 | #cbd5e1 | #d1d5db |
-| --n-400 | #94a3b8 | #9ca3af |
-| --n-500 | #64748b | #6b7280 |
-| --n-600 | #475569 | #4b5563 |
-| --n-700 | #334155 | #374151 |
-| --n-800 | #1e293b | #1f2937 |
-| --n-900 | #0f172a | #374151 |
-| Font | Inter | DM Sans |
+Resultado: quando o `onAuthStateChange` dispara o evento `SIGNED_IN` apos o login, a condicao `if (mountedRef.current && profile)` na linha 127/151 e **sempre falsa**. O perfil e buscado com sucesso do Supabase, mas **nunca e setado no state** (`setCurrentUser` nunca e chamado).
 
-Also update the focus box-shadow color from blue to green (#22c55e).
+Isso explica por que:
+- O login funciona (sessao OK, `isAuthenticated = true`)
+- Mas `currentUser` permanece como `EMPTY_USER` (id vazio, name vazio, plan "free")
+- Hooks como `useStudents` e `useAppointments` verificam `currentUser.id` e nao carregam dados
 
-## 2. Fix AdminPanel Supabase Persistence Bugs
+## Correcao
 
-Two functions in `src/pages/AdminPanel.tsx` only update local state but do NOT persist to Supabase:
+### Arquivo: `src/contexts/AuthContext.tsx`
 
-- **handleUpgradeToPremium** (line 304): Updates `setUsers` locally but never calls `supabase.from('profiles').update(...)`. Will add Supabase persistence.
-- **handleDowngradeToFree** (line 340): Same issue -- only local state update. Will add Supabase persistence.
+**Mudanca 1** - Resetar `mountedRef` no inicio do efeito (linha 107):
 
-## 3. Update Gradient Accents
+```typescript
+useEffect(() => {
+  mountedRef.current = true; // <-- ADICIONAR: reset no re-mount do StrictMode
+  let resolved = false;
+  // ... resto do efeito
+```
 
-The header logo and splash screen use hardcoded `#6366f1` (indigo) gradients. These will be updated to use the Ocean Breeze green palette (`#22c55e` to `#16a34a`).
+**Mudanca 2** - Adicionar logs de debug no `fetchProfile` para diagnosticar falhas silenciosas de RLS (temporario, pode ser removido depois):
 
-Files affected: `src/App.tsx` (header and splash screen gradients).
+```typescript
+const fetchProfile = useCallback(async (userId: string): Promise<Profile | null> => {
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
+    if (error) {
+      console.error("[Auth] fetchProfile error:", error.message, error.code);
+      return null;
+    }
+    if (data) {
+      console.log("[Auth] Profile loaded:", data.id, data.name);
+      return data as Profile;
+    }
+  } catch (e) {
+    console.error("Error fetching profile:", e);
+  }
+  return null;
+}, []);
+```
 
-## 4. Admin Tab Visibility
+**Mudanca 3** - Garantir que o `initSession` tambem respeita o novo reset:
 
-The admin tab is already correctly gated -- it only appears in BottomNavigation when `isAdmin === true`, and `App.tsx` renders `<AdminPanel />` only for admins. No changes needed here.
+Sem mudanca adicional necessaria - o reset do `mountedRef.current = true` no inicio do efeito ja resolve.
 
-## Summary of File Changes
+## Resumo de Mudancas
 
-| File | Changes |
-|------|---------|
-| `src/index.css` | Update CSS variables to Ocean Breeze palette + DM Sans font |
-| `src/pages/AdminPanel.tsx` | Fix handleUpgradeToPremium and handleDowngradeToFree to persist to Supabase |
-| `src/App.tsx` | Update gradient colors from indigo to green |
+| Arquivo | Mudanca |
+|---------|---------|
+| `src/contexts/AuthContext.tsx` | Adicionar `mountedRef.current = true` no inicio do useEffect + melhorar logs do fetchProfile |
 
+## Resultado Esperado
+
+- Login carrega o perfil corretamente do Supabase
+- `currentUser` e populado com nome, plano, isAdmin, etc.
+- Hooks dependentes (`useStudents`, `useAppointments`) recebem `currentUser.id` valido e carregam dados
+- Funciona tanto em StrictMode (dev) quanto em producao
