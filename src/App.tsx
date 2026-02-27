@@ -11,6 +11,7 @@ const Students = lazy(() => import('./pages/Students'));
 const Evolution = lazy(() => import('./pages/Evolution'));
 const UserPanel = lazy(() => import('./pages/UserPanel'));
 const Finance = lazy(() => import('./pages/Finance'));
+const Admin = lazy(() => import('./pages/Admin'));
 const Login = lazy(() => import('./pages/Login'));
 const Register = lazy(() => import('./pages/Register'));
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
@@ -71,6 +72,7 @@ function AppContent() {
       case 'evolution': return <Evolution />;
       case 'user': return <UserPanel />;
       case 'finance': return <Finance />;
+      case 'admin': return <Admin />;
       default: return <Schedule />;
     }
   };
