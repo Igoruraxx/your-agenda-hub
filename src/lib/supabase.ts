@@ -1,16 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.REACT_APP_SUPABASE_URL!;
-const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY!;
-
-
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn(
-    '[Supabase] Variáveis de ambiente não configuradas. ' +
-    'Defina REACT_APP_SUPABASE_URL e REACT_APP_SUPABASE_ANON_KEY no arquivo .env.local'
-  );
-}
+const supabaseUrl = 'https://irergynffqnkertdagbs.supabase.co';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlyZXJneW5mZnFua2VydGRhZ2JzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDkzMTI5MTAsImV4cCI6MjA2NDg4ODkxMH0.MsJBHhjSNElm1kFALFkVUsi7sFaoNDdpEwuXNji8MJM';
 
 export const supabase = createClient(
   supabaseUrl ?? '',
