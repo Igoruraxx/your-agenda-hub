@@ -10,18 +10,19 @@ interface AdminProfile {
   id: string;
   name: string;
   email: string;
-  plan: string;
-  is_admin: boolean;
+  subscription_status: string;
   premium_expires_at: string | null;
   premium_origin: string;
   trial_started_at: string | null;
   created_at: string;
+  roles: string[];
 }
 
 const ORIGIN_LABELS: Record<string, { label: string; color: string }> = {
   trial: { label: 'Trial', color: 'bg-primary/10 text-primary' },
   courtesy: { label: 'Cortesia', color: 'bg-warning/10 text-warning' },
   paid: { label: 'Pago', color: 'bg-success/10 text-success' },
+  stripe: { label: 'Stripe', color: 'bg-accent/10 text-accent' },
 };
 
 const Admin: React.FC = () => {
@@ -43,15 +44,30 @@ const Admin: React.FC = () => {
 
   const fetchProfiles = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, name, email, plan, is_admin, premium_expires_at, premium_origin, trial_started_at, created_at')
-      .order('created_at', { ascending: false });
+    const [{ data: profilesData, error }, { data: rolesData }] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('id, name, email, subscription_status, premium_expires_at, premium_origin, trial_started_at, created_at')
+        .order('created_at', { ascending: false }),
+      supabase.from('user_roles').select('user_id, role'),
+    ]);
 
-    if (!error && data) {
-      setProfiles(data as AdminProfile[]);
+    if (!error && profilesData) {
+      // Build roles map
+      const rolesMap: Record<string, string[]> = {};
+      (rolesData || []).forEach((r: any) => {
+        if (!rolesMap[r.user_id]) rolesMap[r.user_id] = [];
+        rolesMap[r.user_id].push(r.role);
+      });
+
+      const mapped: AdminProfile[] = profilesData.map((p: any) => ({
+        ...p,
+        roles: rolesMap[p.id] || ['user'],
+      }));
+      setProfiles(mapped);
+
       const counts: Record<string, number> = {};
-      for (const p of data) {
+      for (const p of profilesData) {
         const { count } = await supabase.from('students').select('*', { count: 'exact', head: true }).eq('user_id', p.id);
         counts[p.id] = count || 0;
       }
@@ -76,7 +92,7 @@ const Admin: React.FC = () => {
       expiresAt.setDate(expiresAt.getDate() + premiumDays);
 
       const { error } = await supabase.from('profiles').update({
-        plan: 'premium',
+        subscription_status: 'active',
         premium_expires_at: expiresAt.toISOString(),
         premium_origin: premiumOrigin,
       }).eq('id', showPremiumModal.id);
@@ -85,7 +101,7 @@ const Admin: React.FC = () => {
 
       setProfiles(prev => prev.map(p =>
         p.id === showPremiumModal.id
-          ? { ...p, plan: 'premium', premium_expires_at: expiresAt.toISOString(), premium_origin: premiumOrigin }
+          ? { ...p, subscription_status: 'active', premium_expires_at: expiresAt.toISOString(), premium_origin: premiumOrigin }
           : p
       ));
       success(`Premium de ${premiumDays} dias concedido!`);
@@ -96,14 +112,14 @@ const Admin: React.FC = () => {
 
   const handleRemovePremium = async (profileId: string) => {
     const { error } = await supabase.from('profiles').update({
-      plan: 'free',
+      subscription_status: 'free',
       premium_expires_at: null,
       premium_origin: 'trial',
     }).eq('id', profileId);
 
     if (!error) {
       setProfiles(prev => prev.map(p =>
-        p.id === profileId ? { ...p, plan: 'free', premium_expires_at: null, premium_origin: 'trial' } : p
+        p.id === profileId ? { ...p, subscription_status: 'free', premium_expires_at: null, premium_origin: 'trial' } : p
       ));
       success('Premium removido');
     }
@@ -111,10 +127,10 @@ const Admin: React.FC = () => {
 
   const handleDeleteProfile = async (profileId: string) => {
     if (!confirm('Tem certeza que deseja remover este personal? Esta ação não pode ser desfeita.')) return;
-    // Delete students, appointments, etc. first
     await supabase.from('appointments').delete().eq('user_id', profileId);
     await supabase.from('students').delete().eq('user_id', profileId);
     await supabase.from('payments').delete().eq('user_id', profileId);
+    await supabase.from('user_roles').delete().eq('user_id', profileId);
     const { error } = await supabase.from('profiles').delete().eq('id', profileId);
     if (!error) {
       setProfiles(prev => prev.filter(p => p.id !== profileId));
@@ -159,7 +175,8 @@ const Admin: React.FC = () => {
           {filtered.map(profile => {
             const daysRemaining = getDaysRemaining(profile.premium_expires_at);
             const originInfo = ORIGIN_LABELS[profile.premium_origin] || ORIGIN_LABELS.trial;
-            const isPremium = profile.plan === 'premium';
+            const isPremium = profile.subscription_status === 'active';
+            const isProfileAdmin = profile.roles.includes('admin');
 
             return (
               <div key={profile.id} className="card-surface p-4">
@@ -167,7 +184,7 @@ const Admin: React.FC = () => {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-sm font-bold text-foreground truncate">{profile.name}</p>
-                      {profile.is_admin && (
+                      {isProfileAdmin && (
                         <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-destructive/20 text-destructive">Admin</span>
                       )}
                       {isPremium && (
@@ -186,7 +203,6 @@ const Admin: React.FC = () => {
                       </span>
                     </div>
 
-                    {/* Premium info */}
                     {isPremium && (
                       <div className="flex items-center gap-2 mt-1.5">
                         <Clock size={10} className="text-primary" />
@@ -209,14 +225,12 @@ const Admin: React.FC = () => {
                   </div>
 
                   <div className="flex flex-col items-end gap-1.5 shrink-0 ml-3">
-                    {/* Plan badge */}
                     <span className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold ${
                       isPremium ? 'bg-warning/10 text-warning' : 'bg-muted text-muted-foreground'
                     }`}>
                       {isPremium ? <><Crown size={12} /> Premium</> : 'Free'}
                     </span>
 
-                    {/* Actions */}
                     <div className="flex gap-1">
                       <button
                         onClick={() => { setShowPremiumModal(profile); setPremiumDays(30); setPremiumOrigin('courtesy'); }}
@@ -232,7 +246,7 @@ const Admin: React.FC = () => {
                           Remover
                         </button>
                       )}
-                      {!profile.is_admin && (
+                      {!isProfileAdmin && (
                         <button
                           onClick={() => handleDeleteProfile(profile.id)}
                           className="flex items-center gap-0.5 px-2 py-1 rounded text-[10px] font-bold bg-destructive/10 text-destructive hover:bg-destructive/20 transition-all"

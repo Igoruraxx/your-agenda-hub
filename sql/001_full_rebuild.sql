@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════
--- FITPRO — FULL DATABASE REBUILD
+-- FITPRO — FULL DATABASE REBUILD (v2)
 -- Execute este SQL no Supabase SQL Editor
 -- ATENÇÃO: Isso vai DROPAR todas as tabelas existentes!
 -- ═══════════════════════════════════════════════════════════════
@@ -30,10 +30,16 @@ CREATE TABLE public.profiles (
   email text NOT NULL DEFAULT '',
   phone text,
   avatar_url text,
+  -- Stripe subscription fields
   stripe_customer_id text,
   subscription_status text DEFAULT 'free' CHECK (subscription_status IN ('free', 'active', 'canceled', 'past_due')),
   subscription_product_id text,
   subscription_end_date timestamptz,
+  -- Manual premium management (admin grants)
+  premium_expires_at timestamptz,
+  premium_origin text DEFAULT 'trial' CHECK (premium_origin IN ('trial', 'courtesy', 'paid', 'stripe')),
+  trial_started_at timestamptz,
+  -- Timestamps
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );
@@ -140,7 +146,36 @@ CREATE TABLE public.payments (
   created_at timestamptz DEFAULT now()
 );
 
--- 4. SECURITY DEFINER FUNCTION (avoid RLS recursion)
+-- 4. PERFORMANCE INDEXES
+CREATE INDEX idx_students_user_id ON public.students(user_id);
+CREATE INDEX idx_students_share_token ON public.students(share_token);
+CREATE INDEX idx_students_is_active ON public.students(user_id, is_active);
+
+CREATE INDEX idx_appointments_user_id ON public.appointments(user_id);
+CREATE INDEX idx_appointments_date ON public.appointments(user_id, date);
+CREATE INDEX idx_appointments_student_id ON public.appointments(student_id);
+
+CREATE INDEX idx_evolution_photos_student ON public.evolution_photos(student_id);
+CREATE INDEX idx_evolution_photos_user ON public.evolution_photos(user_id);
+
+CREATE INDEX idx_bioimpedance_student ON public.bioimpedance(student_id);
+CREATE INDEX idx_bioimpedance_user ON public.bioimpedance(user_id);
+
+CREATE INDEX idx_measurements_student ON public.measurements(student_id);
+CREATE INDEX idx_measurements_user ON public.measurements(user_id);
+
+CREATE INDEX idx_payments_user_id ON public.payments(user_id);
+CREATE INDEX idx_payments_student_id ON public.payments(student_id);
+CREATE INDEX idx_payments_month_ref ON public.payments(user_id, month_ref);
+CREATE INDEX idx_payments_status ON public.payments(user_id, status);
+CREATE INDEX idx_payments_due_date ON public.payments(due_date);
+
+CREATE INDEX idx_user_roles_user_id ON public.user_roles(user_id);
+CREATE INDEX idx_profiles_email ON public.profiles(email);
+CREATE INDEX idx_profiles_stripe_customer ON public.profiles(stripe_customer_id);
+CREATE INDEX idx_profiles_subscription_status ON public.profiles(subscription_status);
+
+-- 5. SECURITY DEFINER FUNCTION (avoid RLS recursion)
 CREATE OR REPLACE FUNCTION public.has_role(_user_id uuid, _role app_role)
 RETURNS boolean
 LANGUAGE sql
@@ -154,7 +189,7 @@ AS $$
   )
 $$;
 
--- 5. ENABLE RLS ON ALL TABLES
+-- 6. ENABLE RLS ON ALL TABLES
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_roles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
@@ -164,7 +199,7 @@ ALTER TABLE public.bioimpedance ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.measurements ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
 
--- 6. RLS POLICIES
+-- 7. RLS POLICIES
 
 -- == profiles ==
 CREATE POLICY "Users read own profile"
@@ -227,15 +262,58 @@ CREATE POLICY "Users CRUD own evolution_photos"
   ON public.evolution_photos FOR ALL TO authenticated
   USING (user_id = auth.uid());
 
+CREATE POLICY "Admins read all evolution_photos"
+  ON public.evolution_photos FOR SELECT TO authenticated
+  USING (public.has_role(auth.uid(), 'admin'));
+
+-- Anon read for student portal (via student share_token join)
+CREATE POLICY "Anon read evolution_photos by student"
+  ON public.evolution_photos FOR SELECT TO anon
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.students s
+      WHERE s.id = evolution_photos.student_id
+        AND s.share_token IS NOT NULL
+    )
+  );
+
 -- == bioimpedance ==
 CREATE POLICY "Users CRUD own bioimpedance"
   ON public.bioimpedance FOR ALL TO authenticated
   USING (user_id = auth.uid());
 
+CREATE POLICY "Admins read all bioimpedance"
+  ON public.bioimpedance FOR SELECT TO authenticated
+  USING (public.has_role(auth.uid(), 'admin'));
+
+CREATE POLICY "Anon read bioimpedance by student"
+  ON public.bioimpedance FOR SELECT TO anon
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.students s
+      WHERE s.id = bioimpedance.student_id
+        AND s.share_token IS NOT NULL
+    )
+  );
+
 -- == measurements ==
 CREATE POLICY "Users CRUD own measurements"
   ON public.measurements FOR ALL TO authenticated
   USING (user_id = auth.uid());
+
+CREATE POLICY "Admins read all measurements"
+  ON public.measurements FOR SELECT TO authenticated
+  USING (public.has_role(auth.uid(), 'admin'));
+
+CREATE POLICY "Anon read measurements by student"
+  ON public.measurements FOR SELECT TO anon
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.students s
+      WHERE s.id = measurements.student_id
+        AND s.share_token IS NOT NULL
+    )
+  );
 
 -- == payments ==
 CREATE POLICY "Users CRUD own payments"
@@ -246,7 +324,7 @@ CREATE POLICY "Admins read all payments"
   ON public.payments FOR SELECT TO authenticated
   USING (public.has_role(auth.uid(), 'admin'));
 
--- 7. AUTO-CREATE PROFILE + ROLE ON SIGNUP
+-- 8. AUTO-CREATE PROFILE + ROLE ON SIGNUP
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -273,19 +351,43 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
--- 8. ENABLE REALTIME
+-- 9. UPDATED_AT TRIGGER
+CREATE OR REPLACE FUNCTION public.set_updated_at()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_profiles_updated_at
+  BEFORE UPDATE ON public.profiles
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+CREATE TRIGGER trg_students_updated_at
+  BEFORE UPDATE ON public.students
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+CREATE TRIGGER trg_appointments_updated_at
+  BEFORE UPDATE ON public.appointments
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+-- 10. ENABLE REALTIME
 ALTER PUBLICATION supabase_realtime ADD TABLE public.students;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.appointments;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.payments;
 
--- 9. STORAGE BUCKETS (run only if not exist)
+-- 11. STORAGE BUCKETS
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES 
-  ('evolution-photos', 'evolution-photos', false, 10485760, ARRAY['image/jpeg','image/png','image/webp']),
-  ('bioimpedance-images', 'bioimpedance-images', false, 10485760, ARRAY['image/jpeg','image/png','image/webp'])
+  ('evolution-photos', 'evolution-photos', true, 10485760, ARRAY['image/jpeg','image/png','image/webp']),
+  ('bioimpedance-images', 'bioimpedance-images', true, 10485760, ARRAY['image/jpeg','image/png','image/webp']),
+  ('avatars', 'avatars', true, 5242880, ARRAY['image/jpeg','image/png','image/webp'])
 ON CONFLICT (id) DO NOTHING;
 
--- Storage RLS
+-- Storage RLS — evolution-photos
 CREATE POLICY "Users upload own evolution photos"
   ON storage.objects FOR INSERT TO authenticated
   WITH CHECK (bucket_id = 'evolution-photos' AND (storage.foldername(name))[1] = auth.uid()::text);
@@ -298,6 +400,11 @@ CREATE POLICY "Users delete own evolution photos"
   ON storage.objects FOR DELETE TO authenticated
   USING (bucket_id = 'evolution-photos' AND (storage.foldername(name))[1] = auth.uid()::text);
 
+CREATE POLICY "Public read evolution photos"
+  ON storage.objects FOR SELECT TO anon
+  USING (bucket_id = 'evolution-photos');
+
+-- Storage RLS — bioimpedance-images
 CREATE POLICY "Users upload own bioimpedance"
   ON storage.objects FOR INSERT TO authenticated
   WITH CHECK (bucket_id = 'bioimpedance-images' AND (storage.foldername(name))[1] = auth.uid()::text);
@@ -310,7 +417,30 @@ CREATE POLICY "Users delete own bioimpedance"
   ON storage.objects FOR DELETE TO authenticated
   USING (bucket_id = 'bioimpedance-images' AND (storage.foldername(name))[1] = auth.uid()::text);
 
+CREATE POLICY "Public read bioimpedance images"
+  ON storage.objects FOR SELECT TO anon
+  USING (bucket_id = 'bioimpedance-images');
+
+-- Storage RLS — avatars
+CREATE POLICY "Users upload own avatar"
+  ON storage.objects FOR INSERT TO authenticated
+  WITH CHECK (bucket_id = 'avatars' AND (storage.foldername(name))[1] = auth.uid()::text);
+
+CREATE POLICY "Users update own avatar"
+  ON storage.objects FOR UPDATE TO authenticated
+  USING (bucket_id = 'avatars' AND (storage.foldername(name))[1] = auth.uid()::text);
+
+CREATE POLICY "Anyone can read avatars"
+  ON storage.objects FOR SELECT
+  USING (bucket_id = 'avatars');
+
+CREATE POLICY "Users delete own avatar"
+  ON storage.objects FOR DELETE TO authenticated
+  USING (bucket_id = 'avatars' AND (storage.foldername(name))[1] = auth.uid()::text);
+
 -- ═══════════════════════════════════════════
 -- DONE! Para tornar um user admin, execute:
--- INSERT INTO public.user_roles (user_id, role) VALUES ('USER_UUID_HERE', 'admin');
+-- INSERT INTO public.user_roles (user_id, role)
+-- SELECT id, 'admin' FROM auth.users WHERE email = 'semap.igor@gmail.com'
+-- ON CONFLICT (user_id, role) DO NOTHING;
 -- ═══════════════════════════════════════════
